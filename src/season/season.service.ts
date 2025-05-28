@@ -21,14 +21,6 @@ export class SeasonService {
 
     return this.prisma.season.create({
       data: createSeasonDto,
-      include: {
-        property: true,
-        crops: {
-          include: {
-            cultureType: true,
-          },
-        },
-      },
     });
   }
 
@@ -60,14 +52,6 @@ export class SeasonService {
         skip,
         take: registersPerPage,
         orderBy: paginationDto.orderBy,
-        include: {
-          property: true,
-          crops: {
-            include: {
-              cultureType: true,
-            },
-          },
-        },
       }),
       this.prisma.season.count({ where }),
     ]);
@@ -82,14 +66,7 @@ export class SeasonService {
   async findOne(id: string) {
     const season = await this.prisma.season.findFirst({
       where: { id },
-      include: {
-        property: true,
-        crops: {
-          include: {
-            cultureType: true,
-          },
-        },
-      },
+      include: this.getIncludes(),
     });
 
     if (!season) {
@@ -104,14 +81,7 @@ export class SeasonService {
 
     return this.prisma.season.findMany({
       where: { propertyId },
-      include: {
-        property: true,
-        crops: {
-          include: {
-            cultureType: true,
-          },
-        },
-      },
+      include: this.getIncludes(),
       orderBy: {
         year: 'desc',
       },
@@ -144,14 +114,6 @@ export class SeasonService {
     return this.prisma.season.update({
       where: { id },
       data: updateSeasonDto,
-      include: {
-        property: true,
-        crops: {
-          include: {
-            cultureType: true,
-          },
-        },
-      },
     });
   }
 
@@ -160,14 +122,6 @@ export class SeasonService {
 
     return this.prisma.season.delete({
       where: { id },
-      include: {
-        property: true,
-        crops: {
-          include: {
-            cultureType: true,
-          },
-        },
-      },
     });
   }
 
@@ -201,5 +155,27 @@ export class SeasonService {
         'Season with this name and year already exists for this property',
       );
     }
+  }
+
+  private getIncludes() {
+    const includes: Prisma.SeasonInclude = {
+      property: {
+        select: {
+          id: true,
+          name: true,
+        },
+      },
+      crops: {
+        select: {
+          id: true,
+          cultureType: {
+            select: {
+              name: true,
+            },
+          },
+        },
+      },
+    };
+    return includes;
   }
 }

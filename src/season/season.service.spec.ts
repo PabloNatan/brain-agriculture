@@ -26,6 +26,121 @@ describe('SeasonService', () => {
     },
   };
 
+  // Test data factories
+  const createMockProperty = (
+    id = 'cmb872puz0000rxt91c1maoy8',
+    name = 'Farm Test',
+  ) => ({
+    id,
+    name,
+  });
+
+  const createMockCultureType = (name = 'Soja') => ({
+    name,
+  });
+
+  const createMockCrop = (overrides = {}) => ({
+    id: 'crop-1',
+    cultureType: createMockCultureType(),
+    ...overrides,
+  });
+
+  const createMockSeason = (overrides = {}) => ({
+    id: 'season-id',
+    name: 'Safra 2024',
+    year: 2024,
+    propertyId: 'cmb872puz0000rxt91c1maoy8',
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    property: createMockProperty(),
+    crops: [],
+    ...overrides,
+  });
+
+  // Test DTOs
+  const createSeasonDto: CreateSeasonDto = {
+    name: 'Safra 2024',
+    year: 2024,
+    propertyId: 'cmb872puz0000rxt91c1maoy8',
+  };
+
+  const basePaginationDto: PaginationDto = {
+    currentPage: 1,
+    'order[order]': 'asc',
+    registersPerPage: 10,
+    orderBy: { id: 'asc' },
+    filters: {},
+  };
+
+  const updateSeasonDto: UpdateSeasonDto = {
+    name: 'Safra 2024 Updated',
+  };
+
+  // Common include configurations
+  const seasonIncludeConfig = {
+    property: {
+      select: {
+        id: true,
+        name: true,
+      },
+    },
+    crops: {
+      select: {
+        id: true,
+        cultureType: {
+          select: {
+            name: true,
+          },
+        },
+      },
+    },
+  };
+
+  // Helper functions
+  const setupValidationMocks = (
+    propertyExists = true,
+    seasonExists = false,
+  ) => {
+    mockPrismaService.property.findFirst.mockResolvedValue(
+      propertyExists ? createMockProperty() : null,
+    );
+    mockPrismaService.season.findFirst.mockResolvedValue(
+      seasonExists ? createMockSeason() : null,
+    );
+  };
+
+  const expectPropertyValidationCall = (propertyId: string) => {
+    expect(prismaService.property.findFirst).toHaveBeenCalledWith({
+      where: { id: propertyId },
+    });
+  };
+
+  const expectSeasonDuplicateCheck = (
+    dto: CreateSeasonDto | UpdateSeasonDto,
+    seasonId?: string,
+  ) => {
+    const whereCondition: any = {
+      propertyId: dto.propertyId || createSeasonDto.propertyId,
+      name: dto.name,
+      year: dto.year,
+    };
+
+    if (seasonId) {
+      whereCondition.id = { not: seasonId };
+    }
+
+    expect(prismaService.season.findFirst).toHaveBeenCalledWith({
+      where: whereCondition,
+    });
+  };
+
+  const expectSeasonFindFirstCall = (seasonId: string) => {
+    expect(prismaService.season.findFirst).toHaveBeenCalledWith({
+      where: { id: seasonId },
+      include: seasonIncludeConfig,
+    });
+  };
+
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -50,127 +165,50 @@ describe('SeasonService', () => {
   });
 
   describe('create', () => {
-    const createSeasonDto: CreateSeasonDto = {
-      name: 'Safra 2024',
-      year: 2024,
-      propertyId: 'cmb872puz0000rxt91c1maoy8',
-    };
-
     it('should create a season successfully', async () => {
-      const expectedResult = {
-        id: 'season-id',
-        ...createSeasonDto,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        property: {
-          id: 'cmb872puz0000rxt91c1maoy8',
-          name: 'Farm Test',
-        },
-        crops: [],
-      };
-
-      mockPrismaService.property.findFirst.mockResolvedValue({
-        id: 'cmb872puz0000rxt91c1maoy8',
-      });
-      mockPrismaService.season.findFirst.mockResolvedValue(null);
+      const expectedResult = createMockSeason();
+      setupValidationMocks(true, false);
       mockPrismaService.season.create.mockResolvedValue(expectedResult);
 
       const result = await service.create(createSeasonDto);
 
-      expect(prismaService.property.findFirst).toHaveBeenCalledWith({
-        where: { id: createSeasonDto.propertyId },
-      });
-      expect(prismaService.season.findFirst).toHaveBeenCalledWith({
-        where: {
-          propertyId: createSeasonDto.propertyId,
-          name: createSeasonDto.name,
-          year: createSeasonDto.year,
-        },
-      });
+      expectPropertyValidationCall(createSeasonDto.propertyId);
+      expectSeasonDuplicateCheck(createSeasonDto);
       expect(prismaService.season.create).toHaveBeenCalledWith({
         data: createSeasonDto,
-        include: {
-          property: true,
-          crops: {
-            include: {
-              cultureType: true,
-            },
-          },
-        },
       });
       expect(result).toEqual(expectedResult);
     });
 
-    it('should throw BadRequestException when property not found', async () => {
-      mockPrismaService.property.findFirst.mockResolvedValue(null);
+    it.each([
+      ['property not found', false, false],
+      ['season already exists', true, true],
+    ])(
+      'should throw BadRequestException when %s',
+      async (_, propertyExists, seasonExists) => {
+        setupValidationMocks(propertyExists, seasonExists);
 
-      await expect(service.create(createSeasonDto)).rejects.toThrow(
-        BadRequestException,
-      );
-      expect(prismaService.season.create).not.toHaveBeenCalled();
-    });
-
-    it('should throw BadRequestException when season already exists', async () => {
-      const existingSeason = {
-        id: 'existing-id',
-        name: 'Safra 2024',
-        year: 2024,
-        propertyId: 'cmb872puz0000rxt91c1maoy8',
-      };
-
-      mockPrismaService.property.findFirst.mockResolvedValue({
-        id: 'cmb872puz0000rxt91c1maoy8',
-      });
-      mockPrismaService.season.findFirst.mockResolvedValue(existingSeason);
-
-      await expect(service.create(createSeasonDto)).rejects.toThrow(
-        BadRequestException,
-      );
-      expect(prismaService.season.create).not.toHaveBeenCalled();
-    });
+        await expect(service.create(createSeasonDto)).rejects.toThrow(
+          BadRequestException,
+        );
+        expect(prismaService.season.create).not.toHaveBeenCalled();
+      },
+    );
   });
 
   describe('findAll', () => {
-    const paginationDto: PaginationDto = {
-      currentPage: 1,
-      'order[order]': 'asc',
-      registersPerPage: 10,
-      orderBy: { id: 'asc' },
-      filters: {},
-    };
-
     it('should return paginated seasons', async () => {
-      const seasons = [
-        {
-          id: 'season-1',
-          name: 'Safra 2024',
-          year: 2024,
-          propertyId: 'cmb872puz0000rxt91c1maoy8',
-          createdAt: new Date(),
-          updatedAt: new Date(),
-          property: { id: 'cmb872puz0000rxt91c1maoy8', name: 'Farm Test' },
-          crops: [],
-        },
-      ];
-
+      const seasons = [createMockSeason({ id: 'season-1' })];
       mockPrismaService.season.findMany.mockResolvedValue(seasons);
       mockPrismaService.season.count.mockResolvedValue(1);
 
-      const result = await service.findAll(paginationDto);
+      const result = await service.findAll(basePaginationDto);
 
       expect(prismaService.season.findMany).toHaveBeenCalledWith({
         where: {},
         skip: 0,
         take: 10,
-        orderBy: paginationDto.orderBy,
-        include: {
-          property: true,
-          crops: {
-            include: {
-              cultureType: true,
-            },
-          },
-        },
+        orderBy: basePaginationDto.orderBy,
       });
       expect(result).toEqual({
         data: seasons,
@@ -181,7 +219,7 @@ describe('SeasonService', () => {
 
     it('should apply filters correctly', async () => {
       const paginationWithFilters: PaginationDto = {
-        ...paginationDto,
+        ...basePaginationDto,
         filters: {
           name: 'Safra',
           year: 2024,
@@ -205,54 +243,25 @@ describe('SeasonService', () => {
         },
         skip: 0,
         take: 10,
-        orderBy: paginationDto.orderBy,
-        include: {
-          property: true,
-          crops: {
-            include: {
-              cultureType: true,
-            },
-          },
-        },
+        orderBy: basePaginationDto.orderBy,
       });
     });
   });
 
   describe('findOne', () => {
-    it('should return a season by id', async () => {
-      const seasonId = 'season-id';
-      const season = {
-        id: seasonId,
-        name: 'Safra 2024',
-        year: 2024,
-        propertyId: 'cmb872puz0000rxt91c1maoy8',
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        property: { id: 'cmb872puz0000rxt91c1maoy8', name: 'Farm Test' },
-        crops: [],
-      };
+    const seasonId = 'season-id';
 
+    it('should return a season by id', async () => {
+      const season = createMockSeason({ id: seasonId });
       mockPrismaService.season.findFirst.mockResolvedValue(season);
 
       const result = await service.findOne(seasonId);
 
-      expect(prismaService.season.findFirst).toHaveBeenCalledWith({
-        where: { id: seasonId },
-        include: {
-          property: true,
-          crops: {
-            include: {
-              cultureType: true,
-            },
-          },
-        },
-      });
+      expectSeasonFindFirstCall(seasonId);
       expect(result).toEqual(season);
     });
 
     it('should throw NotFoundException when season not found', async () => {
-      const seasonId = 'non-existing-id';
-
       mockPrismaService.season.findFirst.mockResolvedValue(null);
 
       await expect(service.findOne(seasonId)).rejects.toThrow(
@@ -266,36 +275,24 @@ describe('SeasonService', () => {
 
     it('should return seasons for a property', async () => {
       const seasons = [
-        {
+        createMockSeason({
           id: 'season-1',
-          name: 'Safra 2024',
-          year: 2024,
           propertyId,
-          property: { id: propertyId, name: 'Farm Test' },
-          crops: [],
-        },
+          crops: [createMockCrop()],
+        }),
       ];
 
-      mockPrismaService.property.findFirst.mockResolvedValue({
-        id: propertyId,
-      });
+      mockPrismaService.property.findFirst.mockResolvedValue(
+        createMockProperty(propertyId),
+      );
       mockPrismaService.season.findMany.mockResolvedValue(seasons);
 
       const result = await service.findByProperty(propertyId);
 
-      expect(prismaService.property.findFirst).toHaveBeenCalledWith({
-        where: { id: propertyId },
-      });
+      expectPropertyValidationCall(propertyId);
       expect(prismaService.season.findMany).toHaveBeenCalledWith({
         where: { propertyId },
-        include: {
-          property: true,
-          crops: {
-            include: {
-              cultureType: true,
-            },
-          },
-        },
+        include: seasonIncludeConfig,
         orderBy: {
           year: 'desc',
         },
@@ -314,57 +311,22 @@ describe('SeasonService', () => {
 
   describe('update', () => {
     const seasonId = 'season-id';
-    const updateSeasonDto: UpdateSeasonDto = {
-      name: 'Safra 2024 Updated',
-    };
 
     it('should update a season successfully', async () => {
-      const existingSeason = {
-        id: seasonId,
-        name: 'Safra 2024',
-        year: 2024,
-        propertyId: 'cmb872puz0000rxt91c1maoy8',
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        property: { id: 'cmb872puz0000rxt91c1maoy8', name: 'Farm Test' },
-        crops: [],
-      };
-
-      const updatedSeason = {
-        ...existingSeason,
-        name: 'Safra 2024 Updated',
-      };
+      const existingSeason = createMockSeason({ id: seasonId });
+      const updatedSeason = { ...existingSeason, ...updateSeasonDto };
 
       mockPrismaService.season.findFirst
         .mockResolvedValueOnce(existingSeason)
         .mockResolvedValueOnce(null);
-
       mockPrismaService.season.update.mockResolvedValue(updatedSeason);
 
       const result = await service.update(seasonId, updateSeasonDto);
 
-      expect(prismaService.season.findFirst).toHaveBeenCalledWith({
-        where: { id: seasonId },
-        include: {
-          property: true,
-          crops: {
-            include: {
-              cultureType: true,
-            },
-          },
-        },
-      });
+      expectSeasonFindFirstCall(seasonId);
       expect(prismaService.season.update).toHaveBeenCalledWith({
         where: { id: seasonId },
         data: updateSeasonDto,
-        include: {
-          property: true,
-          crops: {
-            include: {
-              cultureType: true,
-            },
-          },
-        },
       });
       expect(result).toEqual(updatedSeason);
     });
@@ -379,31 +341,19 @@ describe('SeasonService', () => {
     });
 
     it('should validate uniqueness when updating name or year', async () => {
-      const existingSeason = {
-        id: seasonId,
-        name: 'Safra 2024',
-        year: 2024,
-        propertyId: 'cmb872puz0000rxt91c1maoy8',
-      };
-
+      const existingSeason = createMockSeason({ id: seasonId });
       const updateWithDuplicate: UpdateSeasonDto = {
         name: 'Existing Season',
         year: 2024,
       };
-
-      const duplicateSeason = {
+      const duplicateSeason = createMockSeason({
         id: 'other-season-id',
         name: 'Existing Season',
         year: 2024,
-        propertyId: 'cmb872puz0000rxt91c1maoy8',
-      };
+      });
 
       mockPrismaService.season.findFirst
-        .mockResolvedValueOnce({
-          ...existingSeason,
-          property: { id: 'cmb872puz0000rxt91c1maoy8', name: 'Farm Test' },
-          crops: [],
-        })
+        .mockResolvedValueOnce(existingSeason)
         .mockResolvedValueOnce(duplicateSeason);
       mockPrismaService.season.findUnique.mockResolvedValue(existingSeason);
 
@@ -417,43 +367,15 @@ describe('SeasonService', () => {
     const seasonId = 'season-id';
 
     it('should delete a season successfully', async () => {
-      const season = {
-        id: seasonId,
-        name: 'Safra 2024',
-        year: 2024,
-        propertyId: 'cmb872puz0000rxt91c1maoy8',
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        property: { id: 'cmb872puz0000rxt91c1maoy8', name: 'Farm Test' },
-        crops: [],
-      };
-
+      const season = createMockSeason({ id: seasonId });
       mockPrismaService.season.findFirst.mockResolvedValue(season);
       mockPrismaService.season.delete.mockResolvedValue(season);
 
       const result = await service.remove(seasonId);
 
-      expect(prismaService.season.findFirst).toHaveBeenCalledWith({
-        where: { id: seasonId },
-        include: {
-          property: true,
-          crops: {
-            include: {
-              cultureType: true,
-            },
-          },
-        },
-      });
+      expectSeasonFindFirstCall(seasonId);
       expect(prismaService.season.delete).toHaveBeenCalledWith({
         where: { id: seasonId },
-        include: {
-          property: true,
-          crops: {
-            include: {
-              cultureType: true,
-            },
-          },
-        },
       });
       expect(result).toEqual(season);
     });
@@ -463,6 +385,79 @@ describe('SeasonService', () => {
 
       await expect(service.remove(seasonId)).rejects.toThrow(NotFoundException);
       expect(prismaService.season.delete).not.toHaveBeenCalled();
+    });
+  });
+
+  // Additional test cases for better coverage
+  describe('edge cases', () => {
+    it('should handle multiple seasons for the same property', async () => {
+      const propertyId = 'property-1';
+      const seasons = [
+        createMockSeason({
+          id: 'season-1',
+          name: 'Safra 2024',
+          year: 2024,
+          propertyId,
+        }),
+        createMockSeason({
+          id: 'season-2',
+          name: 'Safra 2023',
+          year: 2023,
+          propertyId,
+        }),
+      ];
+
+      mockPrismaService.property.findFirst.mockResolvedValue(
+        createMockProperty(propertyId),
+      );
+      mockPrismaService.season.findMany.mockResolvedValue(seasons);
+
+      const result = await service.findByProperty(propertyId);
+
+      expect(result).toHaveLength(2);
+      expect(result).toEqual(seasons);
+    });
+
+    it('should handle pagination with different page sizes', async () => {
+      const customPagination: PaginationDto = {
+        ...basePaginationDto,
+        currentPage: 2,
+        registersPerPage: 5,
+      };
+
+      mockPrismaService.season.findMany.mockResolvedValue([]);
+      mockPrismaService.season.count.mockResolvedValue(10);
+
+      await service.findAll(customPagination);
+
+      expect(prismaService.season.findMany).toHaveBeenCalledWith({
+        where: {},
+        skip: 5, // (page 2 - 1) * 5
+        take: 5,
+        orderBy: customPagination.orderBy,
+      });
+    });
+
+    it('should handle season with multiple crops', async () => {
+      const seasonWithCrops = createMockSeason({
+        crops: [
+          createMockCrop({
+            id: 'crop-1',
+            cultureType: createMockCultureType('Soja'),
+          }),
+          createMockCrop({
+            id: 'crop-2',
+            cultureType: createMockCultureType('Milho'),
+          }),
+        ],
+      });
+
+      mockPrismaService.season.findFirst.mockResolvedValue(seasonWithCrops);
+
+      const result = await service.findOne('season-id');
+
+      expect(result.crops).toHaveLength(2);
+      expect(result).toEqual(seasonWithCrops);
     });
   });
 });
