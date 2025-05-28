@@ -66,20 +66,7 @@ export class CropService {
   async findOne(id: string) {
     const crop = await this.prisma.crop.findFirst({
       where: { id },
-      include: {
-        season: {
-          select: {
-            id: true,
-            name: true,
-          },
-        },
-        cultureType: {
-          select: {
-            id: true,
-            title: true,
-          },
-        },
-      },
+      include: this.getIncludes(),
     });
 
     if (!crop) {
@@ -122,40 +109,14 @@ export class CropService {
   async findBySeasonId(seasonId: string) {
     return this.prisma.crop.findMany({
       where: { seasonId },
-      include: {
-        season: {
-          select: {
-            id: true,
-            name: true,
-          },
-        },
-        cultureType: {
-          select: {
-            id: true,
-            title: true,
-          },
-        },
-      },
+      include: this.getIncludes(),
     });
   }
 
   async findByCultureTypeId(cultureTypeId: string) {
     return this.prisma.crop.findMany({
       where: { cultureTypeId },
-      include: {
-        season: {
-          select: {
-            id: true,
-            name: true,
-          },
-        },
-        cultureType: {
-          select: {
-            id: true,
-            title: true,
-          },
-        },
-      },
+      include: this.getIncludes(),
     });
   }
 
@@ -201,5 +162,23 @@ export class CropService {
         'A crop with this season and culture type combination already exists',
       );
     }
+  }
+
+  private getIncludes() {
+    const includes: Prisma.CropInclude = {
+      season: {
+        select: {
+          id: true,
+          name: true,
+        },
+      },
+      cultureType: {
+        select: {
+          id: true,
+          title: true,
+        },
+      },
+    };
+    return includes;
   }
 }

@@ -27,6 +27,100 @@ describe('CropService', () => {
     },
   };
 
+  // Test data factories
+  const createMockSeason = (id = 'season-1', name = 'Safra 2024') => ({
+    id,
+    name,
+    property: {
+      id: 'property-1',
+      name: 'Fazenda Test',
+    },
+  });
+
+  const createMockCultureType = (id = 'culture-1', name = 'Soja') => ({
+    id,
+    name,
+  });
+
+  const createMockCrop = (overrides = {}) => ({
+    id: 'crop-id',
+    seasonId: 'season-1',
+    cultureTypeId: 'culture-1',
+    plantedArea: 100.5,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    season: createMockSeason(),
+    cultureType: createMockCultureType(),
+    ...overrides,
+  });
+
+  const createCropDto: CreateCropDto = {
+    seasonId: 'season-1',
+    cultureTypeId: 'culture-1',
+    plantedArea: 100.5,
+  };
+
+  const basePaginationDto: PaginationDto = {
+    currentPage: 1,
+    'order[order]': 'asc',
+    registersPerPage: 10,
+    orderBy: { id: 'asc' },
+    filters: {},
+  };
+
+  // Common include configuration
+  const cropIncludeConfig = {
+    season: {
+      select: {
+        id: true,
+        name: true,
+      },
+    },
+    cultureType: {
+      select: {
+        id: true,
+        title: true,
+      },
+    },
+  };
+
+  // Helper functions
+  const setupValidationMocks = (
+    seasonExists = true,
+    cultureTypeExists = true,
+    cropExists = false,
+  ) => {
+    mockPrismaService.season.findFirst.mockResolvedValue(
+      seasonExists ? createMockSeason() : null,
+    );
+    mockPrismaService.cultureType.findFirst.mockResolvedValue(
+      cultureTypeExists ? createMockCultureType() : null,
+    );
+    mockPrismaService.crop.findFirst.mockResolvedValue(
+      cropExists ? createMockCrop() : null,
+    );
+  };
+
+  const expectValidationCalls = (dto: CreateCropDto | UpdateCropDto) => {
+    if ('seasonId' in dto && dto.seasonId) {
+      expect(prismaService.season.findFirst).toHaveBeenCalledWith({
+        where: { id: dto.seasonId },
+      });
+    }
+    if ('cultureTypeId' in dto && dto.cultureTypeId) {
+      expect(prismaService.cultureType.findFirst).toHaveBeenCalledWith({
+        where: { id: dto.cultureTypeId },
+      });
+    }
+  };
+
+  const expectCropFindFirstCall = (cropId: string) => {
+    expect(prismaService.crop.findFirst).toHaveBeenCalledWith({
+      where: { id: cropId },
+      include: cropIncludeConfig,
+    });
+  };
+
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -51,51 +145,14 @@ describe('CropService', () => {
   });
 
   describe('create', () => {
-    const createCropDto: CreateCropDto = {
-      seasonId: 'season-1',
-      cultureTypeId: 'culture-1',
-      plantedArea: 100.5,
-    };
-
     it('should create a crop successfully', async () => {
-      const expectedResult = {
-        id: 'crop-id',
-        ...createCropDto,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        season: {
-          id: 'season-1',
-          name: 'Safra 2024',
-          property: {
-            id: 'property-1',
-            name: 'Fazenda Test',
-          },
-        },
-        cultureType: {
-          id: 'culture-1',
-          name: 'Soja',
-        },
-      };
-
-      mockPrismaService.season.findFirst.mockResolvedValue({
-        id: 'season-1',
-        name: 'Safra 2024',
-      });
-      mockPrismaService.cultureType.findFirst.mockResolvedValue({
-        id: 'culture-1',
-        name: 'Soja',
-      });
-      mockPrismaService.crop.findFirst.mockResolvedValue(null);
+      const expectedResult = createMockCrop();
+      setupValidationMocks(true, true, false);
       mockPrismaService.crop.create.mockResolvedValue(expectedResult);
 
       const result = await service.create(createCropDto);
 
-      expect(prismaService.season.findFirst).toHaveBeenCalledWith({
-        where: { id: createCropDto.seasonId },
-      });
-      expect(prismaService.cultureType.findFirst).toHaveBeenCalledWith({
-        where: { id: createCropDto.cultureTypeId },
-      });
+      expectValidationCalls(createCropDto);
       expect(prismaService.crop.findFirst).toHaveBeenCalledWith({
         where: {
           seasonId: createCropDto.seasonId,
@@ -108,95 +165,36 @@ describe('CropService', () => {
       expect(result).toEqual(expectedResult);
     });
 
-    it('should throw BadRequestException when season not found', async () => {
-      mockPrismaService.season.findFirst.mockResolvedValue(null);
+    it.each([
+      ['season not found', false, true, false],
+      ['culture type not found', true, false, false],
+      ['crop combination already exists', true, true, true],
+    ])(
+      'should throw BadRequestException when %s',
+      async (_, seasonExists, cultureTypeExists, cropExists) => {
+        setupValidationMocks(seasonExists, cultureTypeExists, cropExists);
 
-      await expect(service.create(createCropDto)).rejects.toThrow(
-        BadRequestException,
-      );
-      expect(prismaService.crop.create).not.toHaveBeenCalled();
-    });
-
-    it('should throw BadRequestException when culture type not found', async () => {
-      mockPrismaService.season.findFirst.mockResolvedValue({
-        id: 'season-1',
-        name: 'Safra 2024',
-      });
-      mockPrismaService.cultureType.findFirst.mockResolvedValue(null);
-
-      await expect(service.create(createCropDto)).rejects.toThrow(
-        BadRequestException,
-      );
-      expect(prismaService.crop.create).not.toHaveBeenCalled();
-    });
-
-    it('should throw BadRequestException when crop combination already exists', async () => {
-      const existingCrop = {
-        id: 'existing-crop',
-        seasonId: 'season-1',
-        cultureTypeId: 'culture-1',
-      };
-
-      mockPrismaService.season.findFirst.mockResolvedValue({
-        id: 'season-1',
-        name: 'Safra 2024',
-      });
-      mockPrismaService.cultureType.findFirst.mockResolvedValue({
-        id: 'culture-1',
-        name: 'Soja',
-      });
-      mockPrismaService.crop.findFirst.mockResolvedValue(existingCrop);
-
-      await expect(service.create(createCropDto)).rejects.toThrow(
-        BadRequestException,
-      );
-      expect(prismaService.crop.create).not.toHaveBeenCalled();
-    });
+        await expect(service.create(createCropDto)).rejects.toThrow(
+          BadRequestException,
+        );
+        expect(prismaService.crop.create).not.toHaveBeenCalled();
+      },
+    );
   });
 
   describe('findAll', () => {
-    const paginationDto: PaginationDto = {
-      currentPage: 1,
-      'order[order]': 'asc',
-      registersPerPage: 10,
-      orderBy: { id: 'asc' },
-      filters: {},
-    };
-
     it('should return paginated crops', async () => {
-      const crops = [
-        {
-          id: 'crop-1',
-          seasonId: 'season-1',
-          cultureTypeId: 'culture-1',
-          plantedArea: 100.5,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-          season: {
-            id: 'season-1',
-            name: 'Safra 2024',
-            property: {
-              id: 'property-1',
-              name: 'Fazenda Test',
-            },
-          },
-          cultureType: {
-            id: 'culture-1',
-            name: 'Soja',
-          },
-        },
-      ];
-
+      const crops = [createMockCrop({ id: 'crop-1' })];
       mockPrismaService.crop.findMany.mockResolvedValue(crops);
       mockPrismaService.crop.count.mockResolvedValue(1);
 
-      const result = await service.findAll(paginationDto);
+      const result = await service.findAll(basePaginationDto);
 
       expect(prismaService.crop.findMany).toHaveBeenCalledWith({
         where: {},
         skip: 0,
         take: 10,
-        orderBy: paginationDto.orderBy,
+        orderBy: basePaginationDto.orderBy,
       });
       expect(result).toEqual({
         data: crops,
@@ -207,7 +205,7 @@ describe('CropService', () => {
 
     it('should apply filters correctly', async () => {
       const paginationWithFilters: PaginationDto = {
-        ...paginationDto,
+        ...basePaginationDto,
         filters: { seasonId: 'season-1', cultureTypeId: 'culture-1' },
       };
 
@@ -217,68 +215,28 @@ describe('CropService', () => {
       await service.findAll(paginationWithFilters);
 
       expect(prismaService.crop.findMany).toHaveBeenCalledWith({
-        where: {
-          seasonId: 'season-1',
-          cultureTypeId: 'culture-1',
-        },
+        where: paginationWithFilters.filters,
         skip: 0,
         take: 10,
-        orderBy: paginationDto.orderBy,
+        orderBy: basePaginationDto.orderBy,
       });
     });
   });
 
   describe('findOne', () => {
-    it('should return a crop by id', async () => {
-      const cropId = 'crop-id';
-      const crop = {
-        id: cropId,
-        seasonId: 'season-1',
-        cultureTypeId: 'culture-1',
-        plantedArea: 100.5,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        season: {
-          id: 'season-1',
-          name: 'Safra 2024',
-          property: {
-            id: 'property-1',
-            name: 'Fazenda Test',
-          },
-        },
-        cultureType: {
-          id: 'culture-1',
-          name: 'Soja',
-        },
-      };
+    const cropId = 'crop-id';
 
+    it('should return a crop by id', async () => {
+      const crop = createMockCrop({ id: cropId });
       mockPrismaService.crop.findFirst.mockResolvedValue(crop);
 
       const result = await service.findOne(cropId);
 
-      expect(prismaService.crop.findFirst).toHaveBeenCalledWith({
-        where: { id: cropId },
-        include: {
-          season: {
-            select: {
-              id: true,
-              name: true,
-            },
-          },
-          cultureType: {
-            select: {
-              id: true,
-              title: true,
-            },
-          },
-        },
-      });
+      expectCropFindFirstCall(cropId);
       expect(result).toEqual(crop);
     });
 
     it('should throw NotFoundException when crop not found', async () => {
-      const cropId = 'non-existing-id';
-
       mockPrismaService.crop.findFirst.mockResolvedValue(null);
 
       await expect(service.findOne(cropId)).rejects.toThrow(NotFoundException);
@@ -292,42 +250,15 @@ describe('CropService', () => {
     };
 
     it('should update a crop successfully', async () => {
-      const existingCrop = {
-        id: cropId,
-        seasonId: 'season-1',
-        cultureTypeId: 'culture-1',
-        plantedArea: 100.5,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      };
-
-      const updatedCrop = {
-        ...existingCrop,
-        plantedArea: 150.75,
-      };
+      const existingCrop = createMockCrop({ id: cropId });
+      const updatedCrop = { ...existingCrop, ...updateCropDto };
 
       mockPrismaService.crop.findFirst.mockResolvedValue(existingCrop);
       mockPrismaService.crop.update.mockResolvedValue(updatedCrop);
 
       const result = await service.update(cropId, updateCropDto);
 
-      expect(prismaService.crop.findFirst).toHaveBeenCalledWith({
-        where: { id: cropId },
-        include: {
-          season: {
-            select: {
-              id: true,
-              name: true,
-            },
-          },
-          cultureType: {
-            select: {
-              id: true,
-              title: true,
-            },
-          },
-        },
-      });
+      expectCropFindFirstCall(cropId);
       expect(prismaService.crop.update).toHaveBeenCalledWith({
         where: { id: cropId },
         data: updateCropDto,
@@ -345,13 +276,7 @@ describe('CropService', () => {
     });
 
     it('should validate season and culture type when updating', async () => {
-      const existingCrop = {
-        id: cropId,
-        seasonId: 'season-1',
-        cultureTypeId: 'culture-1',
-        plantedArea: 100.5,
-      };
-
+      const existingCrop = createMockCrop({ id: cropId });
       const updateWithIds: UpdateCropDto = {
         seasonId: 'season-2',
         cultureTypeId: 'culture-2',
@@ -360,14 +285,12 @@ describe('CropService', () => {
       mockPrismaService.crop.findFirst
         .mockResolvedValueOnce(existingCrop)
         .mockResolvedValueOnce(null);
-      mockPrismaService.season.findFirst.mockResolvedValue({
-        id: 'season-2',
-        name: 'Safra 2025',
-      });
-      mockPrismaService.cultureType.findFirst.mockResolvedValue({
-        id: 'culture-2',
-        name: 'Milho',
-      });
+      mockPrismaService.season.findFirst.mockResolvedValue(
+        createMockSeason('season-2', 'Safra 2025'),
+      );
+      mockPrismaService.cultureType.findFirst.mockResolvedValue(
+        createMockCultureType('culture-2', 'Milho'),
+      );
       mockPrismaService.crop.update.mockResolvedValue({
         ...existingCrop,
         ...updateWithIds,
@@ -375,12 +298,7 @@ describe('CropService', () => {
 
       await service.update(cropId, updateWithIds);
 
-      expect(prismaService.season.findFirst).toHaveBeenCalledWith({
-        where: { id: 'season-2' },
-      });
-      expect(prismaService.cultureType.findFirst).toHaveBeenCalledWith({
-        where: { id: 'culture-2' },
-      });
+      expectValidationCalls(updateWithIds);
       expect(prismaService.crop.findFirst).toHaveBeenCalledWith({
         where: {
           seasonId: 'season-2',
@@ -391,35 +309,21 @@ describe('CropService', () => {
     });
 
     it('should throw BadRequestException when trying to update with existing combination', async () => {
-      const existingCrop = {
-        id: cropId,
-        seasonId: 'season-1',
-        cultureTypeId: 'culture-1',
-        plantedArea: 100.5,
-      };
-
+      const existingCrop = createMockCrop({ id: cropId });
       const updateWithConflict: UpdateCropDto = {
         seasonId: 'season-2',
         cultureTypeId: 'culture-2',
       };
-
-      const conflictingCrop = {
+      const conflictingCrop = createMockCrop({
         id: 'different-crop-id',
         seasonId: 'season-2',
         cultureTypeId: 'culture-2',
-      };
+      });
 
       mockPrismaService.crop.findFirst
         .mockResolvedValueOnce(existingCrop)
         .mockResolvedValueOnce(conflictingCrop);
-      mockPrismaService.season.findFirst.mockResolvedValue({
-        id: 'season-2',
-        name: 'Safra 2025',
-      });
-      mockPrismaService.cultureType.findFirst.mockResolvedValue({
-        id: 'culture-2',
-        name: 'Milho',
-      });
+      setupValidationMocks(true, true, false);
 
       await expect(service.update(cropId, updateWithConflict)).rejects.toThrow(
         BadRequestException,
@@ -432,37 +336,13 @@ describe('CropService', () => {
     const cropId = 'crop-id';
 
     it('should delete a crop successfully', async () => {
-      const crop = {
-        id: cropId,
-        seasonId: 'season-1',
-        cultureTypeId: 'culture-1',
-        plantedArea: 100.5,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      };
-
+      const crop = createMockCrop({ id: cropId });
       mockPrismaService.crop.findFirst.mockResolvedValue(crop);
       mockPrismaService.crop.delete.mockResolvedValue(crop);
 
       const result = await service.remove(cropId);
 
-      expect(prismaService.crop.findFirst).toHaveBeenCalledWith({
-        where: { id: cropId },
-        include: {
-          season: {
-            select: {
-              id: true,
-              name: true,
-            },
-          },
-          cultureType: {
-            select: {
-              id: true,
-              title: true,
-            },
-          },
-        },
-      });
+      expectCropFindFirstCall(cropId);
       expect(prismaService.crop.delete).toHaveBeenCalledWith({
         where: { id: cropId },
       });
@@ -480,28 +360,7 @@ describe('CropService', () => {
   describe('findBySeasonId', () => {
     it('should return crops by season id', async () => {
       const seasonId = 'season-1';
-      const crops = [
-        {
-          id: 'crop-1',
-          seasonId,
-          cultureTypeId: 'culture-1',
-          plantedArea: 100.5,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-          season: {
-            id: 'season-1',
-            name: 'Safra 2024',
-            property: {
-              id: 'property-1',
-              name: 'Fazenda Test',
-            },
-          },
-          cultureType: {
-            id: 'culture-1',
-            name: 'Soja',
-          },
-        },
-      ];
+      const crops = [createMockCrop({ id: 'crop-1', seasonId })];
 
       mockPrismaService.crop.findMany.mockResolvedValue(crops);
 
@@ -509,20 +368,7 @@ describe('CropService', () => {
 
       expect(prismaService.crop.findMany).toHaveBeenCalledWith({
         where: { seasonId },
-        include: {
-          season: {
-            select: {
-              id: true,
-              name: true,
-            },
-          },
-          cultureType: {
-            select: {
-              id: true,
-              title: true,
-            },
-          },
-        },
+        include: cropIncludeConfig,
       });
       expect(result).toEqual(crops);
     });
@@ -531,28 +377,7 @@ describe('CropService', () => {
   describe('findByCultureTypeId', () => {
     it('should return crops by culture type id', async () => {
       const cultureTypeId = 'culture-1';
-      const crops = [
-        {
-          id: 'crop-1',
-          seasonId: 'season-1',
-          cultureTypeId,
-          plantedArea: 100.5,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-          season: {
-            id: 'season-1',
-            name: 'Safra 2024',
-            property: {
-              id: 'property-1',
-              name: 'Fazenda Test',
-            },
-          },
-          cultureType: {
-            id: 'culture-1',
-            name: 'Soja',
-          },
-        },
-      ];
+      const crops = [createMockCrop({ id: 'crop-1', cultureTypeId })];
 
       mockPrismaService.crop.findMany.mockResolvedValue(crops);
 
@@ -560,20 +385,7 @@ describe('CropService', () => {
 
       expect(prismaService.crop.findMany).toHaveBeenCalledWith({
         where: { cultureTypeId },
-        include: {
-          season: {
-            select: {
-              id: true,
-              name: true,
-            },
-          },
-          cultureType: {
-            select: {
-              id: true,
-              title: true,
-            },
-          },
-        },
+        include: cropIncludeConfig,
       });
       expect(result).toEqual(crops);
     });
