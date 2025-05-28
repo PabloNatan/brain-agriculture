@@ -1,0 +1,97 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Producer {
+  id           String       @id @default(cuid())
+  document     String       @unique // CPF or CNPJ
+  documentType DocumentType
+  name         String
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  properties Property[]
+
+  @@map("producers")
+}
+
+model Property {
+  id             String   @id @default(cuid())
+  name           String
+  city           String
+  state          String
+  // Area in hectares
+  totalArea      Decimal  @db.Decimal(10, 2)
+  arableArea     Decimal  @db.Decimal(10, 2)
+  vegetationArea Decimal  @db.Decimal(10, 2)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  producerId String
+
+  producer Producer      @relation(fields: [producerId], references: [id], onDelete: Cascade)
+  seasons  Season[]
+  cultures CultureType[]
+
+  @@map("properties")
+}
+
+model Season {
+  id        String   @id @default(cuid())
+  name      String
+  year      Int
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  propertyId String
+
+  crops    Crop[]
+  property Property @relation(fields: [propertyId], references: [id])
+
+  @@map("seasons")
+}
+
+// Crop Culture Types model (e.g., Soja, Milho, Café)
+model CultureType {
+  id        String   @id @default(cuid())
+  title     String
+  name      String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  crops      Crop[]
+  properties Property[]
+
+  @@map("culture_types")
+}
+
+// Crops planted (junction table between Property, Season, and CultureType)
+model Crop {
+  id          String   @id @default(cuid())
+  plantedArea Decimal? @db.Decimal(10, 2)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  seasonId      String
+  cultureTypeId String
+
+  season      Season      @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+  cultureType CultureType @relation(fields: [cultureTypeId], references: [id], onDelete: Cascade)
+
+  // Ensure unique combination of season and culture type
+  @@unique([seasonId, cultureTypeId])
+  @@map("crops")
+}
+
+enum DocumentType {
+  CPF
+  CNPJ
+
+  @@map("document_type")
+}
