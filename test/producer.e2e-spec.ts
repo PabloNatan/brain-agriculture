@@ -12,6 +12,8 @@ describe('ProducerController (e2e)', () => {
   let app: INestApplication<App>;
   let prisma: PrismaService;
   let createdProducerId: string;
+  const cpf1 = cpf.generate();
+  const cnpj1 = cnpj.generate();
 
   beforeEach(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
@@ -29,8 +31,8 @@ describe('ProducerController (e2e)', () => {
     await prisma.producer.deleteMany({
       where: {
         OR: [
-          { document: '29927349009' },
-          { document: '12345678000195' },
+          { document: cpf1 },
+          { document: cnpj1 },
           { document: '09441517011' },
           { document: '11111111111' },
           { document: 'invalid' },
@@ -44,8 +46,8 @@ describe('ProducerController (e2e)', () => {
     await prisma.producer.deleteMany({
       where: {
         OR: [
-          { document: '12345678901' },
-          { document: '12345678000195' },
+          { document: cpf1 },
+          { document: cnpj1 },
           { document: '98765432109' },
           { document: '11111111111' },
           { document: 'invalid' },
@@ -60,18 +62,17 @@ describe('ProducerController (e2e)', () => {
 
   describe('POST /producers', () => {
     it('should create a new producer with CPF', () => {
-      const cpfProducer = cpf.generate();
       return request(app.getHttpServer())
         .post('/producers')
         .send({
-          document: cpfProducer,
+          document: cpf1,
           documentType: DocumentType.CPF,
           name: 'João Silva',
         })
         .expect(201)
         .expect((res) => {
           expect(res.body).toHaveProperty('id');
-          expect(res.body.document).toBe(cpfProducer);
+          expect(res.body.document).toBe(cpf1);
           expect(res.body.documentType).toBe(DocumentType.CPF);
           expect(res.body.name).toBe('João Silva');
           expect(res.body).toHaveProperty('createdAt');
@@ -81,18 +82,17 @@ describe('ProducerController (e2e)', () => {
     });
 
     it('should create a new producer with CNPJ', () => {
-      const cnpjCreated = cnpj.generate();
       return request(app.getHttpServer())
         .post('/producers')
         .send({
-          document: cnpjCreated,
+          document: cnpj1,
           documentType: DocumentType.CNPJ,
           name: 'Empresa Rural LTDA',
         })
         .expect(201)
         .expect((res) => {
           expect(res.body).toHaveProperty('id');
-          expect(res.body.document).toBe(cnpjCreated);
+          expect(res.body.document).toBe(cnpj1);
           expect(res.body.documentType).toBe(DocumentType.CNPJ);
           expect(res.body.name).toBe('Empresa Rural LTDA');
         });
@@ -113,7 +113,7 @@ describe('ProducerController (e2e)', () => {
       return request(app.getHttpServer())
         .post('/producers')
         .send({
-          document: '12345678901',
+          document: cnpj1,
         })
         .expect(400);
     });
@@ -133,7 +133,7 @@ describe('ProducerController (e2e)', () => {
       return request(app.getHttpServer())
         .post('/producers')
         .send({
-          document: '12345678901',
+          document: cnpj1,
           documentType: 'INVALID',
           name: 'João Silva',
         })
@@ -146,7 +146,7 @@ describe('ProducerController (e2e)', () => {
       // Create test data
       await prisma.producer.create({
         data: {
-          document: '12345678901',
+          document: cnpj1,
           documentType: DocumentType.CPF,
           name: 'João Silva',
         },
@@ -190,7 +190,7 @@ describe('ProducerController (e2e)', () => {
       // Create test producer and property data
       const producer = await prisma.producer.create({
         data: {
-          document: '12345678901',
+          document: cnpj1,
           documentType: DocumentType.CPF,
           name: 'João Silva',
         },
@@ -229,7 +229,7 @@ describe('ProducerController (e2e)', () => {
     beforeEach(async () => {
       const producer = await prisma.producer.create({
         data: {
-          document: '12345678901',
+          document: cnpj1,
           documentType: DocumentType.CPF,
           name: 'João Silva',
         },
@@ -243,7 +243,7 @@ describe('ProducerController (e2e)', () => {
         .expect(200)
         .expect((res) => {
           expect(res.body.id).toBe(createdProducerId);
-          expect(res.body.document).toBe('12345678901');
+          expect(res.body.document).toBe(cnpj1);
           expect(res.body.name).toBe('João Silva');
         });
     });
@@ -259,7 +259,7 @@ describe('ProducerController (e2e)', () => {
     beforeEach(async () => {
       const producer = await prisma.producer.create({
         data: {
-          document: '12345678901',
+          document: cnpj1,
           documentType: DocumentType.CPF,
           name: 'João Silva',
         },
@@ -277,7 +277,7 @@ describe('ProducerController (e2e)', () => {
         .expect((res) => {
           expect(res.body.id).toBe(createdProducerId);
           expect(res.body.name).toBe('João Silva Updated');
-          expect(res.body.document).toBe('12345678901');
+          expect(res.body.document).toBe(cnpj1);
         });
     });
 
@@ -327,7 +327,7 @@ describe('ProducerController (e2e)', () => {
     beforeEach(async () => {
       const producer = await prisma.producer.create({
         data: {
-          document: '12345678901',
+          document: cnpj1,
           documentType: DocumentType.CPF,
           name: 'João Silva',
         },
