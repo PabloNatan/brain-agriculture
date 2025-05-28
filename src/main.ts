@@ -2,12 +2,14 @@ import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { CustomConfigService } from './custom-config/custom-config.service';
+import { ZodExceptionFilter } from './common/filters/zod-exception.filter';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
   const configService = app.get(CustomConfigService);
-  app.setGlobalPrefix('/products-api');
+  app.setGlobalPrefix('/api');
+  app.useGlobalFilters(new ZodExceptionFilter());
 
   const config = new DocumentBuilder()
     .setTitle('Brain Agriculture API')
