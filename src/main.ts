@@ -1,7 +1,7 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
-import { CustomConfigService } from './custom-config/custom-config.service';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import { CustomConfigService } from './custom-config/custom-config.service';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -24,6 +24,6 @@ async function bootstrap() {
 
   const port = configService.port;
 
-  await app.listen(port ?? 3000);
+  await app.listen(port ?? 4000);
 }
 bootstrap();
