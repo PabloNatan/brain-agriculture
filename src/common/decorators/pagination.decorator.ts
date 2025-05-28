@@ -41,7 +41,6 @@ export function ApiPagination(options?: {
         name: 'order[columnName]',
         required: false,
         description: 'Column name to order by',
-        example: 'name',
       }),
       ApiQuery({
         name: 'order[order]',

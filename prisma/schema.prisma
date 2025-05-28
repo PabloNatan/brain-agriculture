@@ -51,7 +51,7 @@ model Season {
   propertyId String
 
   crops    Crop[]
-  property Property @relation(fields: [propertyId], references: [id])
+  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
 
   @@map("seasons")
 }

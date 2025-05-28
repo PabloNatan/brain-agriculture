@@ -7,6 +7,7 @@ import { AppModule } from '../src/app.module';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { ZodExceptionFilter } from 'src/common/filters/zod-exception.filter';
 import { cpf } from 'cpf-cnpj-validator';
+import { filterToString } from 'src/common/utils/filterToString';
 
 describe('CultureTypeController (e2e)', () => {
   let app: INestApplication<App>;
@@ -247,11 +248,7 @@ describe('CultureTypeController (e2e)', () => {
     it('should return empty array when no matches found', () => {
       return request(app.getHttpServer())
         .get(
-          `/culture-types?filters=${encodeURIComponent(
-            JSON.stringify({
-              name: 'non_existent_culture',
-            }),
-          )}`,
+          `/culture-types?${filterToString({ name: 'non_existent_culture' })}`,
         )
         .expect(200)
         .expect((res) => {

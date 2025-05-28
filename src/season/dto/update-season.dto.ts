@@ -4,7 +4,7 @@ import { createZodDto } from 'nestjs-zod';
 
 export const UpdateSeasonSchema = z.object({
   name: z.string().min(1).max(255).optional(),
-  year: z.number().int().min(1900).max(2100).optional(),
+  year: z.coerce.number().int().min(1900).max(2100).optional(),
   propertyId: z.string().cuid().optional(),
 });
 
