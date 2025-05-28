@@ -12,6 +12,77 @@ describe('PropertyService', () => {
   let service: PropertyService;
   let prismaService: PrismaService;
 
+  // Test data factories
+  const createMockProducer = (overrides = {}) => ({
+    id: 'producer-id-123',
+    name: 'João Silva',
+    document: '12345678901',
+    documentType: DocumentType.CPF,
+    ...overrides,
+  });
+
+  const createMockProperty = (overrides = {}) => ({
+    id: 'property-id',
+    name: 'Fazenda São João',
+    city: 'Ribeirão Preto',
+    state: 'SP',
+    totalArea: new Decimal(1000),
+    arableArea: new Decimal(800),
+    vegetationArea: new Decimal(200),
+    producerId: 'producer-id-123',
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    seasons: [],
+    ...overrides,
+  });
+
+  const createPropertyDto: CreatePropertyDto = {
+    name: 'Fazenda São João',
+    city: 'Ribeirão Preto',
+    state: 'SP',
+    totalArea: 1000,
+    arableArea: 800,
+    vegetationArea: 200,
+    producerId: 'producer-id-123',
+  };
+
+  const defaultPaginationDto: PaginationDto = {
+    currentPage: 1,
+    'order[order]': 'asc',
+    registersPerPage: 10,
+    orderBy: { id: 'asc' },
+    filters: {},
+  };
+
+  const propertyIncludeQuery = {
+    include: {
+      producer: {
+        select: {
+          id: true,
+          name: true,
+          document: true,
+          documentType: true,
+        },
+      },
+      seasons: {
+        include: {
+          crops: {
+            include: {
+              cultureType: true,
+            },
+          },
+        },
+      },
+      cultures: {
+        select: {
+          id: true,
+          name: true,
+          title: true,
+        },
+      },
+    },
+  };
+
   const mockPrismaService = {
     property: {
       create: jest.fn(),
@@ -50,36 +121,17 @@ describe('PropertyService', () => {
   });
 
   describe('create', () => {
-    const createPropertyDto: CreatePropertyDto = {
-      name: 'Fazenda São João',
-      city: 'Ribeirão Preto',
-      state: 'SP',
-      totalArea: 1000,
-      arableArea: 800,
-      vegetationArea: 200,
-      producerId: 'producer-id-123',
-    };
+    const mockProducer = createMockProducer();
 
-    const mockProducer = {
-      id: 'producer-id-123',
-      name: 'João Silva',
-      document: '12345678901',
-      documentType: DocumentType.CPF,
-    };
+    beforeEach(() => {
+      mockPrismaService.producer.findFirst.mockResolvedValue(mockProducer);
+    });
 
     it('should create a property successfully', async () => {
-      const expectedResult = {
-        id: 'property-id',
-        ...createPropertyDto,
-        totalArea: new Decimal(1000),
-        arableArea: new Decimal(800),
-        vegetationArea: new Decimal(200),
-        createdAt: new Date(),
-        updatedAt: new Date(),
+      const expectedResult = createMockProperty({
         producer: mockProducer,
-      };
+      });
 
-      mockPrismaService.producer.findFirst.mockResolvedValue(mockProducer);
       mockPrismaService.property.create.mockResolvedValue(expectedResult);
 
       const result = await service.create(createPropertyDto);
@@ -114,8 +166,6 @@ describe('PropertyService', () => {
         vegetationArea: 200, // 900 + 200 = 1100 > 1000
       };
 
-      mockPrismaService.producer.findFirst.mockResolvedValue(mockProducer);
-
       await expect(service.create(invalidDto)).rejects.toThrow(
         BadRequestException,
       );
@@ -128,8 +178,6 @@ describe('PropertyService', () => {
         arableArea: -100,
       };
 
-      mockPrismaService.producer.findFirst.mockResolvedValue(mockProducer);
-
       await expect(service.create(invalidDto)).rejects.toThrow(
         BadRequestException,
       );
@@ -138,48 +186,25 @@ describe('PropertyService', () => {
   });
 
   describe('findAll', () => {
-    const paginationDto: PaginationDto = {
-      currentPage: 1,
-      'order[order]': 'asc',
-      registersPerPage: 10,
-      orderBy: { id: 'asc' },
-      filters: {},
+    const mockPropertyWithProducer = {
+      ...createMockProperty({ id: 'property-1' }),
+      producer: createMockProducer(),
+      _count: { seasons: 0 },
     };
 
     it('should return paginated properties', async () => {
-      const properties = [
-        {
-          id: 'property-1',
-          name: 'Fazenda São João',
-          city: 'Ribeirão Preto',
-          state: 'SP',
-          totalArea: new Decimal(1000),
-          arableArea: new Decimal(800),
-          vegetationArea: new Decimal(200),
-          producerId: 'producer-id-123',
-          createdAt: new Date(),
-          updatedAt: new Date(),
-          producer: {
-            id: 'producer-id-123',
-            name: 'João Silva',
-            document: '12345678901',
-            documentType: DocumentType.CPF,
-          },
-          seasons: [],
-          _count: { seasons: 0 },
-        },
-      ];
+      const properties = [mockPropertyWithProducer];
 
       mockPrismaService.property.findMany.mockResolvedValue(properties);
       mockPrismaService.property.count.mockResolvedValue(1);
 
-      const result = await service.findAll(paginationDto);
+      const result = await service.findAll(defaultPaginationDto);
 
       expect(prismaService.property.findMany).toHaveBeenCalledWith({
         where: {},
         skip: 0,
         take: 10,
-        orderBy: paginationDto.orderBy,
+        orderBy: defaultPaginationDto.orderBy,
       });
       expect(result).toEqual({
         data: properties,
@@ -190,7 +215,7 @@ describe('PropertyService', () => {
 
     it('should apply filters correctly', async () => {
       const paginationWithFilters: PaginationDto = {
-        ...paginationDto,
+        ...defaultPaginationDto,
         filters: { name: 'São João', city: 'Ribeirão', state: 'SP' },
       };
 
@@ -216,76 +241,36 @@ describe('PropertyService', () => {
         },
         skip: 0,
         take: 10,
-        orderBy: paginationDto.orderBy,
+        orderBy: defaultPaginationDto.orderBy,
       });
     });
   });
 
   describe('findOne', () => {
-    it('should return a property by id', async () => {
-      const propertyId = 'property-id';
-      const property = {
-        id: propertyId,
-        name: 'Fazenda São João',
-        city: 'Ribeirão Preto',
-        state: 'SP',
-        totalArea: new Decimal(1000),
-        arableArea: new Decimal(800),
-        vegetationArea: new Decimal(200),
-        producerId: 'producer-id-123',
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        producer: {
-          id: 'producer-id-123',
-          name: 'João Silva',
-          document: '12345678901',
-          documentType: DocumentType.CPF,
-        },
-        seasons: [],
-      };
+    const propertyId = 'property-id';
+    const mockPropertyWithRelations = {
+      ...createMockProperty({ id: propertyId }),
+      producer: createMockProducer(),
+    };
 
-      mockPrismaService.property.findFirst.mockResolvedValue(property);
+    it('should return a property by id', async () => {
+      mockPrismaService.property.findFirst.mockResolvedValue(
+        mockPropertyWithRelations,
+      );
 
       const result = await service.findOne(propertyId);
 
       expect(prismaService.property.findFirst).toHaveBeenCalledWith({
         where: { id: propertyId },
-        include: {
-          producer: {
-            select: {
-              id: true,
-              name: true,
-              document: true,
-              documentType: true,
-            },
-          },
-          seasons: {
-            include: {
-              crops: {
-                include: {
-                  cultureType: true,
-                },
-              },
-            },
-          },
-          cultures: {
-            select: {
-              id: true,
-              name: true,
-              title: true,
-            },
-          },
-        },
+        ...propertyIncludeQuery,
       });
-      expect(result).toEqual(property);
+      expect(result).toEqual(mockPropertyWithRelations);
     });
 
     it('should throw NotFoundException when property not found', async () => {
-      const propertyId = 'non-existing-id';
-
       mockPrismaService.property.findFirst.mockResolvedValue(null);
 
-      await expect(service.findOne(propertyId)).rejects.toThrow(
+      await expect(service.findOne('non-existing-id')).rejects.toThrow(
         NotFoundException,
       );
     });
@@ -298,24 +283,13 @@ describe('PropertyService', () => {
     };
 
     const existingProperty = {
-      id: propertyId,
-      name: 'Fazenda São João',
-      city: 'Ribeirão Preto',
-      state: 'SP',
-      totalArea: new Decimal(1000),
-      arableArea: new Decimal(800),
-      vegetationArea: new Decimal(200),
-      producerId: 'producer-id-123',
-      createdAt: new Date(),
-      updatedAt: new Date(),
-      producer: {
-        id: 'producer-id-123',
-        name: 'João Silva',
-        document: '12345678901',
-        documentType: DocumentType.CPF,
-      },
-      seasons: [],
+      ...createMockProperty({ id: propertyId }),
+      producer: createMockProducer(),
     };
+
+    beforeEach(() => {
+      mockPrismaService.property.findFirst.mockResolvedValue(existingProperty);
+    });
 
     it('should update a property successfully', async () => {
       const updatedProperty = {
@@ -323,7 +297,6 @@ describe('PropertyService', () => {
         name: 'Fazenda São João Updated',
       };
 
-      mockPrismaService.property.findFirst.mockResolvedValue(existingProperty);
       mockPrismaService.property.update.mockResolvedValue(updatedProperty);
 
       const result = await service.update(propertyId, updatePropertyDto);
@@ -345,14 +318,12 @@ describe('PropertyService', () => {
         producerId: 'new-producer-id',
       };
 
-      const mockNewProducer = {
+      const mockNewProducer = createMockProducer({
         id: 'new-producer-id',
         name: 'Maria Silva',
         document: '98765432109',
-        documentType: DocumentType.CPF,
-      };
+      });
 
-      mockPrismaService.property.findFirst.mockResolvedValue(existingProperty);
       mockPrismaService.producer.findFirst.mockResolvedValue(mockNewProducer);
       mockPrismaService.property.update.mockResolvedValue({
         ...existingProperty,
@@ -372,8 +343,6 @@ describe('PropertyService', () => {
         vegetationArea: 300, // 900 + 300 = 1200 > 1000
       };
 
-      mockPrismaService.property.findFirst.mockResolvedValue(existingProperty);
-
       await expect(
         service.update(propertyId, updateWithInvalidAreas),
       ).rejects.toThrow(BadRequestException);
@@ -382,65 +351,29 @@ describe('PropertyService', () => {
 
   describe('remove', () => {
     const propertyId = 'property-id';
-    const property = {
-      id: propertyId,
-      name: 'Fazenda São João',
-      city: 'Ribeirão Preto',
-      state: 'SP',
-      totalArea: new Decimal(1000),
-      arableArea: new Decimal(800),
-      vegetationArea: new Decimal(200),
-      producerId: 'producer-id-123',
-      createdAt: new Date(),
-      updatedAt: new Date(),
-      producer: {
-        id: 'producer-id-123',
-        name: 'João Silva',
-        document: '12345678901',
-        documentType: DocumentType.CPF,
-      },
-      seasons: [],
+    const mockPropertyWithRelations = {
+      ...createMockProperty({ id: propertyId }),
+      producer: createMockProducer(),
     };
 
     it('should delete a property successfully', async () => {
-      mockPrismaService.property.findFirst.mockResolvedValue(property);
-      mockPrismaService.property.delete.mockResolvedValue(property);
+      mockPrismaService.property.findFirst.mockResolvedValue(
+        mockPropertyWithRelations,
+      );
+      mockPrismaService.property.delete.mockResolvedValue(
+        mockPropertyWithRelations,
+      );
 
       const result = await service.remove(propertyId);
 
       expect(prismaService.property.findFirst).toHaveBeenCalledWith({
         where: { id: propertyId },
-        include: {
-          producer: {
-            select: {
-              id: true,
-              name: true,
-              document: true,
-              documentType: true,
-            },
-          },
-          seasons: {
-            include: {
-              crops: {
-                include: {
-                  cultureType: true,
-                },
-              },
-            },
-          },
-          cultures: {
-            select: {
-              id: true,
-              name: true,
-              title: true,
-            },
-          },
-        },
+        ...propertyIncludeQuery,
       });
       expect(prismaService.property.delete).toHaveBeenCalledWith({
         where: { id: propertyId },
       });
-      expect(result).toEqual(property);
+      expect(result).toEqual(mockPropertyWithRelations);
     });
 
     it('should throw NotFoundException when property not found', async () => {
@@ -455,44 +388,27 @@ describe('PropertyService', () => {
 
   describe('findByProducerId', () => {
     const producerId = 'producer-id-123';
-    const mockProducer = {
-      id: producerId,
-      name: 'João Silva',
-      document: '12345678901',
-      documentType: DocumentType.CPF,
-    };
+    const mockProducer = createMockProducer({ id: producerId });
 
-    const paginationDto: PaginationDto = {
-      currentPage: 1,
-      'order[order]': 'asc',
-      registersPerPage: 10,
-      orderBy: { id: 'asc' },
-      filters: {},
-    };
+    beforeEach(() => {
+      mockPrismaService.producer.findFirst.mockResolvedValue(mockProducer);
+    });
 
     it('should return properties by producer id', async () => {
       const properties = [
         {
-          id: 'property-1',
-          name: 'Fazenda São João',
-          city: 'Ribeirão Preto',
-          state: 'SP',
-          totalArea: new Decimal(1000),
-          arableArea: new Decimal(800),
-          vegetationArea: new Decimal(200),
-          producerId,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-          seasons: [],
+          ...createMockProperty({ id: 'property-1', producerId }),
           _count: { seasons: 0 },
         },
       ];
 
-      mockPrismaService.producer.findFirst.mockResolvedValue(mockProducer);
       mockPrismaService.property.findMany.mockResolvedValue(properties);
       mockPrismaService.property.count.mockResolvedValue(1);
 
-      const result = await service.findByProducerId(producerId, paginationDto);
+      const result = await service.findByProducerId(
+        producerId,
+        defaultPaginationDto,
+      );
 
       expect(prismaService.producer.findFirst).toHaveBeenCalledWith({
         where: { id: producerId },
@@ -501,7 +417,7 @@ describe('PropertyService', () => {
         where: { producerId },
         skip: 0,
         take: 10,
-        orderBy: paginationDto.orderBy,
+        orderBy: defaultPaginationDto.orderBy,
       });
       expect(result).toEqual({
         data: properties,
@@ -514,7 +430,7 @@ describe('PropertyService', () => {
       mockPrismaService.producer.findFirst.mockResolvedValue(null);
 
       await expect(
-        service.findByProducerId(producerId, paginationDto),
+        service.findByProducerId(producerId, defaultPaginationDto),
       ).rejects.toThrow(BadRequestException);
     });
   });

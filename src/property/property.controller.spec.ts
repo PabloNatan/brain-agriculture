@@ -12,6 +12,73 @@ describe('PropertyController', () => {
   let controller: PropertyController;
   let service: PropertyService;
 
+  // Test data factories
+  const createMockProducer = (overrides = {}) => ({
+    id: 'producer-id-123',
+    name: 'João Silva',
+    document: '12345678901',
+    documentType: DocumentType.CPF,
+    ...overrides,
+  });
+
+  const createMockProperty = (overrides = {}) => ({
+    id: 'property-id',
+    name: 'Fazenda São João',
+    city: 'Ribeirão Preto',
+    state: 'SP',
+    totalArea: new Decimal(1000),
+    arableArea: new Decimal(800),
+    vegetationArea: new Decimal(200),
+    producerId: 'producer-id-123',
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    producer: createMockProducer(),
+    ...overrides,
+  });
+
+  const createMockCulture = (overrides = {}) => ({
+    id: 'culture-type-id-123',
+    name: 'soja',
+    title: 'Soja',
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    ...overrides,
+  });
+
+  const createMockPaginatedResponse = (data: any[], overrides = {}) => ({
+    data,
+    totalCountOfRegisters: data.length,
+    currentPage: 1,
+    ...overrides,
+  });
+
+  // Shared DTOs
+  const createPropertyDto: CreatePropertyDto = {
+    name: 'Fazenda São João',
+    city: 'Ribeirão Preto',
+    state: 'SP',
+    totalArea: 1000,
+    arableArea: 800,
+    vegetationArea: 200,
+    producerId: 'producer-id-123',
+  };
+
+  const defaultPaginationDto: PaginationDto = {
+    currentPage: 1,
+    registersPerPage: 10,
+    'order[order]': 'asc' as const,
+    orderBy: { id: 'asc' },
+    filters: {},
+  };
+
+  const attachCultureDto: AttachCultureDto = {
+    cultureTypeId: 'culture-type-id-123',
+  };
+
+  // Constants
+  const PROPERTY_ID = 'property-id';
+  const PRODUCER_ID = 'producer-id-123';
+
   const mockPropertyService = {
     create: jest.fn(),
     findAll: jest.fn(),
@@ -47,31 +114,7 @@ describe('PropertyController', () => {
 
   describe('create', () => {
     it('should create a property', async () => {
-      const createPropertyDto: CreatePropertyDto = {
-        name: 'Fazenda São João',
-        city: 'Ribeirão Preto',
-        state: 'SP',
-        totalArea: 1000,
-        arableArea: 800,
-        vegetationArea: 200,
-        producerId: 'producer-id-123',
-      };
-
-      const expectedResult = {
-        id: 'property-id',
-        ...createPropertyDto,
-        totalArea: new Decimal(1000),
-        arableArea: new Decimal(800),
-        vegetationArea: new Decimal(200),
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        producer: {
-          id: 'producer-id-123',
-          name: 'João Silva',
-          document: '12345678901',
-          documentType: DocumentType.CPF,
-        },
-      };
+      const expectedResult = createMockProperty();
 
       mockPropertyService.create.mockResolvedValue(expectedResult);
 
@@ -84,92 +127,49 @@ describe('PropertyController', () => {
 
   describe('findAll', () => {
     it('should return paginated properties', async () => {
-      const paginationDto: PaginationDto = {
-        currentPage: 1,
-        registersPerPage: 10,
-        'order[order]': 'asc' as const,
-        orderBy: { id: 'asc' },
-        filters: {},
-      };
+      const mockPropertyWithExtras = createMockProperty({
+        id: 'property-1',
+        seasons: [],
+        _count: { seasons: 0 },
+      });
 
-      const expectedResult = {
-        data: [
-          {
-            id: 'property-1',
-            name: 'Fazenda São João',
-            city: 'Ribeirão Preto',
-            state: 'SP',
-            totalArea: new Decimal(1000),
-            arableArea: new Decimal(800),
-            vegetationArea: new Decimal(200),
-            producerId: 'producer-id-123',
-            createdAt: new Date(),
-            updatedAt: new Date(),
-            producer: {
-              id: 'producer-id-123',
-              name: 'João Silva',
-              document: '12345678901',
-              documentType: DocumentType.CPF,
-            },
-            seasons: [],
-            _count: { seasons: 0 },
-          },
-        ],
-        totalCountOfRegisters: 1,
-        currentPage: 1,
-      };
+      const expectedResult = createMockPaginatedResponse([
+        mockPropertyWithExtras,
+      ]);
 
       mockPropertyService.findAll.mockResolvedValue(expectedResult);
 
-      const result = await controller.findAll(paginationDto);
+      const result = await controller.findAll(defaultPaginationDto);
 
-      expect(service.findAll).toHaveBeenCalledWith(paginationDto);
+      expect(service.findAll).toHaveBeenCalledWith(defaultPaginationDto);
       expect(result).toEqual(expectedResult);
     });
   });
 
   describe('findByProducerId', () => {
     it('should return paginated properties by producer id', async () => {
-      const producerId = 'producer-id-123';
-      const paginationDto: PaginationDto = {
-        currentPage: 1,
-        registersPerPage: 10,
-        'order[order]': 'asc' as const,
-        orderBy: { id: 'asc' },
-        filters: {},
-      };
+      const mockPropertyForProducer = createMockProperty({
+        id: 'property-1',
+        producerId: PRODUCER_ID,
+        seasons: [],
+        _count: { seasons: 0 },
+        producer: undefined, // Remove producer object for this response
+      });
 
-      const expectedResult = {
-        data: [
-          {
-            id: 'property-1',
-            name: 'Fazenda São João',
-            city: 'Ribeirão Preto',
-            state: 'SP',
-            totalArea: new Decimal(1000),
-            arableArea: new Decimal(800),
-            vegetationArea: new Decimal(200),
-            producerId,
-            createdAt: new Date(),
-            updatedAt: new Date(),
-            seasons: [],
-            _count: { seasons: 0 },
-          },
-        ],
-        totalCountOfRegisters: 1,
-        currentPage: 1,
-      };
+      const expectedResult = createMockPaginatedResponse([
+        mockPropertyForProducer,
+      ]);
 
       mockPropertyService.findByProducerId.mockResolvedValue(expectedResult);
 
       const result = await controller.findByProducerId(
-        producerId,
-        paginationDto,
+        PRODUCER_ID,
+        defaultPaginationDto,
       );
 
       expect(service.findByProducerId).toHaveBeenCalledWith(
-        producerId,
-        paginationDto,
+        PRODUCER_ID,
+        defaultPaginationDto,
       );
       expect(result).toEqual(expectedResult);
     });
@@ -177,68 +177,37 @@ describe('PropertyController', () => {
 
   describe('findOne', () => {
     it('should return a property by id', async () => {
-      const propertyId = 'property-id';
-      const expectedResult = {
-        id: propertyId,
-        name: 'Fazenda São João',
-        city: 'Ribeirão Preto',
-        state: 'SP',
-        totalArea: new Decimal(1000),
-        arableArea: new Decimal(800),
-        vegetationArea: new Decimal(200),
-        producerId: 'producer-id-123',
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        producer: {
-          id: 'producer-id-123',
-          name: 'João Silva',
-          document: '12345678901',
-          documentType: DocumentType.CPF,
-        },
+      const expectedResult = createMockProperty({
+        id: PROPERTY_ID,
         seasons: [],
-      };
+      });
 
       mockPropertyService.findOne.mockResolvedValue(expectedResult);
 
-      const result = await controller.findOne(propertyId);
+      const result = await controller.findOne(PROPERTY_ID);
 
-      expect(service.findOne).toHaveBeenCalledWith(propertyId);
+      expect(service.findOne).toHaveBeenCalledWith(PROPERTY_ID);
       expect(result).toEqual(expectedResult);
     });
   });
 
   describe('update', () => {
     it('should update a property', async () => {
-      const propertyId = 'property-id';
       const updatePropertyDto: UpdatePropertyDto = {
         name: 'Fazenda São João Updated',
       };
 
-      const expectedResult = {
-        id: propertyId,
+      const expectedResult = createMockProperty({
+        id: PROPERTY_ID,
         name: 'Fazenda São João Updated',
-        city: 'Ribeirão Preto',
-        state: 'SP',
-        totalArea: new Decimal(1000),
-        arableArea: new Decimal(800),
-        vegetationArea: new Decimal(200),
-        producerId: 'producer-id-123',
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        producer: {
-          id: 'producer-id-123',
-          name: 'João Silva',
-          document: '12345678901',
-          documentType: DocumentType.CPF,
-        },
-      };
+      });
 
       mockPropertyService.update.mockResolvedValue(expectedResult);
 
-      const result = await controller.update(propertyId, updatePropertyDto);
+      const result = await controller.update(PROPERTY_ID, updatePropertyDto);
 
       expect(service.update).toHaveBeenCalledWith(
-        propertyId,
+        PROPERTY_ID,
         updatePropertyDto,
       );
       expect(result).toEqual(expectedResult);
@@ -247,81 +216,37 @@ describe('PropertyController', () => {
 
   describe('remove', () => {
     it('should delete a property', async () => {
-      const propertyId = 'property-id';
-      const expectedResult = {
-        id: propertyId,
-        name: 'Fazenda São João',
-        city: 'Ribeirão Preto',
-        state: 'SP',
-        totalArea: new Decimal(1000),
-        arableArea: new Decimal(800),
-        vegetationArea: new Decimal(200),
-        producerId: 'producer-id-123',
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        producer: {
-          id: 'producer-id-123',
-          name: 'João Silva',
-          document: '12345678901',
-          documentType: DocumentType.CPF,
-        },
-      };
+      const expectedResult = createMockProperty({
+        id: PROPERTY_ID,
+      });
 
       mockPropertyService.remove.mockResolvedValue(expectedResult);
 
-      const result = await controller.remove(propertyId);
+      const result = await controller.remove(PROPERTY_ID);
 
-      expect(service.remove).toHaveBeenCalledWith(propertyId);
+      expect(service.remove).toHaveBeenCalledWith(PROPERTY_ID);
       expect(result).toEqual(expectedResult);
     });
   });
 
   describe('attachCultureToProperty', () => {
     it('should attach culture to property successfully', async () => {
-      const propertyId = 'property-id';
-      const attachCultureDto: AttachCultureDto = {
-        cultureTypeId: 'culture-type-id-123',
-      };
-
-      const expectedResult = {
-        id: propertyId,
-        name: 'Fazenda São João',
-        city: 'Ribeirão Preto',
-        state: 'SP',
-        totalArea: new Decimal(1000),
-        arableArea: new Decimal(800),
-        vegetationArea: new Decimal(200),
-        producerId: 'producer-id-123',
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        cultures: [
-          {
-            id: 'culture-type-id-123',
-            name: 'soja',
-            title: 'Soja',
-            createdAt: new Date(),
-            updatedAt: new Date(),
-          },
-        ],
-        producer: {
-          id: 'producer-id-123',
-          name: 'João Silva',
-          document: '12345678901',
-          documentType: DocumentType.CPF,
-        },
-      };
+      const expectedResult = createMockProperty({
+        id: PROPERTY_ID,
+        cultures: [createMockCulture()],
+      });
 
       mockPropertyService.attachCultureToProperty.mockResolvedValue(
         expectedResult,
       );
 
       const result = await controller.attachCultureToProperty(
-        propertyId,
+        PROPERTY_ID,
         attachCultureDto,
       );
 
       expect(service.attachCultureToProperty).toHaveBeenCalledWith(
-        propertyId,
+        PROPERTY_ID,
         attachCultureDto,
       );
       expect(result).toEqual(expectedResult);
