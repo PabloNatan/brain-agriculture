@@ -285,12 +285,12 @@ describe('ProducerController (e2e)', () => {
       return request(app.getHttpServer())
         .put(`/producers/${createdProducerId}`)
         .send({
-          document: '12345678000195',
+          document: cnpj1,
           documentType: DocumentType.CNPJ,
         })
         .expect(200)
         .expect((res) => {
-          expect(res.body.document).toBe('12345678000195');
+          expect(res.body.document).toBe(cnpj1);
           expect(res.body.documentType).toBe(DocumentType.CNPJ);
         });
     });
