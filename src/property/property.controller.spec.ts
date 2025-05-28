@@ -6,6 +6,7 @@ import { UpdatePropertyDto } from './dto/update-property.dto';
 import { PaginationDto } from 'src/common/dto/pagination.dto';
 import { DocumentType } from '@prisma/client';
 import { Decimal } from '@prisma/client/runtime/library';
+import { AttachCultureDto } from './dto/attach-culture.dto';
 
 describe('PropertyController', () => {
   let controller: PropertyController;
@@ -18,6 +19,7 @@ describe('PropertyController', () => {
     update: jest.fn(),
     remove: jest.fn(),
     findByProducerId: jest.fn(),
+    attachCultureToProperty: jest.fn(),
   };
 
   beforeEach(async () => {
@@ -270,6 +272,58 @@ describe('PropertyController', () => {
       const result = await controller.remove(propertyId);
 
       expect(service.remove).toHaveBeenCalledWith(propertyId);
+      expect(result).toEqual(expectedResult);
+    });
+  });
+
+  describe('attachCultureToProperty', () => {
+    it('should attach culture to property successfully', async () => {
+      const propertyId = 'property-id';
+      const attachCultureDto: AttachCultureDto = {
+        cultureTypeId: 'culture-type-id-123',
+      };
+
+      const expectedResult = {
+        id: propertyId,
+        name: 'Fazenda São João',
+        city: 'Ribeirão Preto',
+        state: 'SP',
+        totalArea: new Decimal(1000),
+        arableArea: new Decimal(800),
+        vegetationArea: new Decimal(200),
+        producerId: 'producer-id-123',
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        cultures: [
+          {
+            id: 'culture-type-id-123',
+            name: 'soja',
+            title: 'Soja',
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          },
+        ],
+        producer: {
+          id: 'producer-id-123',
+          name: 'João Silva',
+          document: '12345678901',
+          documentType: DocumentType.CPF,
+        },
+      };
+
+      mockPropertyService.attachCultureToProperty.mockResolvedValue(
+        expectedResult,
+      );
+
+      const result = await controller.attachCultureToProperty(
+        propertyId,
+        attachCultureDto,
+      );
+
+      expect(service.attachCultureToProperty).toHaveBeenCalledWith(
+        propertyId,
+        attachCultureDto,
+      );
       expect(result).toEqual(expectedResult);
     });
   });

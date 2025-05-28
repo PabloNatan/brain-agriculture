@@ -12,6 +12,7 @@ import {
 import { PaginationDto } from 'src/common/dto/pagination.dto';
 import { Prisma } from '@prisma/client';
 import { Decimal } from '@prisma/client/runtime/library';
+import { AttachCultureDto } from './dto/attach-culture.dto';
 
 @Injectable()
 export class PropertyService {
@@ -34,16 +35,6 @@ export class PropertyService {
         totalArea: new Decimal(createPropertyDto.totalArea),
         arableArea: new Decimal(createPropertyDto.arableArea),
         vegetationArea: new Decimal(createPropertyDto.vegetationArea),
-      },
-      include: {
-        producer: {
-          select: {
-            id: true,
-            name: true,
-            document: true,
-            documentType: true,
-          },
-        },
       },
     });
   }
@@ -118,6 +109,13 @@ export class PropertyService {
             },
           },
         },
+        cultures: {
+          select: {
+            id: true,
+            name: true,
+            title: true,
+          },
+        },
       },
     });
 
@@ -160,16 +158,6 @@ export class PropertyService {
           vegetationArea ?? existingProperty.vegetationArea,
         ),
       },
-      include: {
-        producer: {
-          select: {
-            id: true,
-            name: true,
-            document: true,
-            documentType: true,
-          },
-        },
-      },
     });
   }
 
@@ -178,16 +166,6 @@ export class PropertyService {
 
     return this.prisma.property.delete({
       where: { id },
-      include: {
-        producer: {
-          select: {
-            id: true,
-            name: true,
-            document: true,
-            documentType: true,
-          },
-        },
-      },
     });
   }
 
@@ -204,25 +182,6 @@ export class PropertyService {
         skip,
         take: registersPerPage,
         orderBy: paginationDto?.orderBy || { createdAt: 'desc' },
-        include: {
-          seasons: {
-            select: {
-              id: true,
-              name: true,
-              year: true,
-              crops: {
-                include: {
-                  cultureType: true,
-                },
-              },
-            },
-          },
-          _count: {
-            select: {
-              seasons: true,
-            },
-          },
-        },
       }),
       this.prisma.property.count({ where: { producerId } }),
     ]);
@@ -232,6 +191,55 @@ export class PropertyService {
       totalCountOfRegisters,
       currentPage,
     };
+  }
+
+  async attachCultureToProperty(
+    propertyId: string,
+    attachCultureDto: AttachCultureDto,
+  ) {
+    const { cultureTypeId } = attachCultureDto;
+
+    // Verify property exists
+    const property = await this.findOne(propertyId);
+
+    // Verify culture type exists
+    const cultureType = await this.prisma.cultureType.findFirst({
+      where: { id: cultureTypeId },
+    });
+
+    if (!cultureType) {
+      throw new BadRequestException('Culture type not found');
+    }
+
+    // Check if culture is already attached to this property
+    const existingConnection = await this.prisma.property.findFirst({
+      where: {
+        id: propertyId,
+        cultures: {
+          some: {
+            id: cultureTypeId,
+          },
+        },
+      },
+    });
+
+    if (existingConnection) {
+      throw new BadRequestException(
+        'Culture type is already attached to this property',
+      );
+    }
+
+    // Attach the culture type to the property
+    return await this.prisma.property.update({
+      where: { id: propertyId },
+      data: {
+        cultures: {
+          connect: {
+            id: cultureTypeId,
+          },
+        },
+      },
+    });
   }
 
   private async verifyProducerExists(producerId: string) {

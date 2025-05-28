@@ -60,7 +60,7 @@ export function ApiPagination(options?: {
         required: false,
         description:
           'JSON string with filters (e.g., {"name": "John", "state": "SP"})',
-        example: '{"name": "John", "state": "SP"}',
+        example: '{}',
       }),
     );
   }

@@ -94,16 +94,6 @@ describe('PropertyService', () => {
           arableArea: new Decimal(createPropertyDto.arableArea),
           vegetationArea: new Decimal(createPropertyDto.vegetationArea),
         },
-        include: {
-          producer: {
-            select: {
-              id: true,
-              name: true,
-              document: true,
-              documentType: true,
-            },
-          },
-        },
       });
       expect(result).toEqual(expectedResult);
     });
@@ -278,6 +268,13 @@ describe('PropertyService', () => {
               },
             },
           },
+          cultures: {
+            select: {
+              id: true,
+              name: true,
+              title: true,
+            },
+          },
         },
       });
       expect(result).toEqual(property);
@@ -431,20 +428,17 @@ describe('PropertyService', () => {
               },
             },
           },
+          cultures: {
+            select: {
+              id: true,
+              name: true,
+              title: true,
+            },
+          },
         },
       });
       expect(prismaService.property.delete).toHaveBeenCalledWith({
         where: { id: propertyId },
-        include: {
-          producer: {
-            select: {
-              id: true,
-              name: true,
-              document: true,
-              documentType: true,
-            },
-          },
-        },
       });
       expect(result).toEqual(property);
     });
@@ -508,25 +502,6 @@ describe('PropertyService', () => {
         skip: 0,
         take: 10,
         orderBy: paginationDto.orderBy,
-        include: {
-          seasons: {
-            select: {
-              id: true,
-              name: true,
-              year: true,
-              crops: {
-                include: {
-                  cultureType: true,
-                },
-              },
-            },
-          },
-          _count: {
-            select: {
-              seasons: true,
-            },
-          },
-        },
       });
       expect(result).toEqual({
         data: properties,

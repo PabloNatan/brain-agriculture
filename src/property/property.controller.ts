@@ -26,6 +26,7 @@ import {
 } from './dto/update-property.dto';
 import { PaginationDto, PaginationPipe } from 'src/common/dto/pagination.dto';
 import { ApiPagination } from 'src/common/decorators/pagination.decorator';
+import { AttachCultureDto, AttachCulturePipe } from './dto/attach-culture.dto';
 
 @ApiTags('Properties')
 @Controller('properties')
@@ -120,5 +121,31 @@ export class PropertyController {
   @ApiResponse({ status: 404, description: 'Property not found.' })
   async remove(@Param('id') id: string) {
     return this.propertyService.remove(id);
+  }
+
+  @Post(':id/attach-culture')
+  @ApiOperation({ summary: 'Attach culture type to property' })
+  @ApiParam({ name: 'id', description: 'Property ID' })
+  @ApiBody({ type: AttachCultureDto })
+  @ApiResponse({
+    status: 201,
+    description: 'Culture type has been successfully attached to property.',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Property, season, or culture type not found.',
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Bad request. Culture already attached or validation error.',
+  })
+  async attachCultureToProperty(
+    @Param('id') propertyId: string,
+    @Body(AttachCulturePipe) attachCultureDto: AttachCultureDto,
+  ) {
+    return this.propertyService.attachCultureToProperty(
+      propertyId,
+      attachCultureDto,
+    );
   }
 }
