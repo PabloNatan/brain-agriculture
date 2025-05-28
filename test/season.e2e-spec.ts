@@ -15,11 +15,81 @@ describe('SeasonController (e2e)', () => {
   let createdSeasonId: string;
   let testProducerId: string;
   let testPropertyId: string;
-  const seasonMockYear = 1999;
-  const safraMock = 'Safra 1999';
-  const safraMock1 = 'Safra 1998';
-  const farmMock = 'Season Farm';
-  const seasonProducerCpf = cpf.generate();
+
+  // Centralized mock data
+  const MOCKS = {
+    seasons: {
+      names: {
+        safra1999: 'Safra 1999',
+        safra1998: 'Safra 1998',
+        test: 'Test Season',
+        updated: 'Updated Season',
+        toDelete: 'Season to Delete',
+        existing: 'Existing Season',
+        incomplete: 'Incomplete Season',
+        ancient: 'Safra Ancient',
+        future: 'Safra Future',
+        safra2023: 'Safra 2023',
+        completelyUpdated: 'Completely Updated Season',
+      },
+      years: {
+        mock: 1999,
+        current: 2024,
+        next: 2025,
+        previous: 2023,
+        future: 2026,
+        invalid: {
+          tooLow: 1800,
+          tooHigh: 2200,
+        },
+      },
+    },
+    producer: {
+      document: cpf.generate(),
+      name: 'Test Producer',
+    },
+    property: {
+      name: 'Season Farm',
+      city: 'São Paulo',
+      state: 'SP',
+      totalArea: 100.0,
+      arableArea: 80.0,
+      vegetationArea: 20.0,
+    },
+    ids: {
+      nonExistent: 'cmb8j9e2j0022rssssw1kuj76',
+      invalid: 'invalid-id-format',
+    },
+  };
+
+  // Helper functions for creating season data
+  const createSeasonData = (
+    overrides: Partial<{
+      name: string;
+      year: number;
+      propertyId: string;
+    }> = {},
+  ) => ({
+    name: MOCKS.seasons.names.safra1999,
+    year: MOCKS.seasons.years.current,
+    propertyId: testPropertyId,
+    ...overrides,
+  });
+
+  const createSeasonInDb = async (
+    overrides: Partial<{
+      name: string;
+      year: number;
+      propertyId: string;
+    }> = {},
+  ) => {
+    return await prisma.season.create({
+      data: createSeasonData(overrides),
+    });
+  };
+
+  // Get all season names for cleanup
+  const getAllSeasonNames = () => Object.values(MOCKS.seasons.names);
 
   beforeEach(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
@@ -33,49 +103,34 @@ describe('SeasonController (e2e)', () => {
 
     await app.init();
 
-    // Clean up test data
+    // Clean up test data using centralized season names
     await prisma.season.deleteMany({
       where: {
-        OR: [
-          { name: safraMock },
-          { name: safraMock1 },
-          { name: 'Test Season' },
-          { name: 'Updated Season' },
-          { name: 'Season to Delete' },
-        ],
+        OR: getAllSeasonNames().map((name) => ({ name })),
       },
     });
 
     await prisma.property.deleteMany({
-      where: {
-        name: farmMock,
-      },
+      where: { name: MOCKS.property.name },
     });
 
     await prisma.producer.deleteMany({
-      where: {
-        document: seasonProducerCpf,
-      },
+      where: { document: MOCKS.producer.document },
     });
 
     // Create test producer and property for seasons
     const producer = await prisma.producer.create({
       data: {
-        document: seasonProducerCpf,
+        document: MOCKS.producer.document,
         documentType: DocumentType.CPF,
-        name: 'Test Producer',
+        name: MOCKS.producer.name,
       },
     });
     testProducerId = producer.id;
 
     const property = await prisma.property.create({
       data: {
-        name: farmMock,
-        city: 'São Paulo',
-        state: 'SP',
-        totalArea: 100.0,
-        arableArea: 80.0,
-        vegetationArea: 20.0,
+        ...MOCKS.property,
         producerId: testProducerId,
       },
     });
@@ -83,16 +138,10 @@ describe('SeasonController (e2e)', () => {
   });
 
   afterEach(async () => {
-    // Clean up test data after each test
+    // Clean up test data after each test using centralized season names
     await prisma.season.deleteMany({
       where: {
-        OR: [
-          { name: safraMock },
-          { name: safraMock1 },
-          { name: 'Test Season' },
-          { name: 'Updated Season' },
-          { name: 'Season to Delete' },
-        ],
+        OR: getAllSeasonNames().map((name) => ({ name })),
       },
     });
   });
@@ -100,15 +149,11 @@ describe('SeasonController (e2e)', () => {
   afterAll(async () => {
     // Final cleanup
     await prisma.property.deleteMany({
-      where: {
-        name: farmMock,
-      },
+      where: { name: MOCKS.property.name },
     });
 
     await prisma.producer.deleteMany({
-      where: {
-        document: seasonProducerCpf,
-      },
+      where: { document: MOCKS.producer.document },
     });
 
     await app.close();
@@ -118,16 +163,12 @@ describe('SeasonController (e2e)', () => {
     it('should create a new season', () => {
       return request(app.getHttpServer())
         .post('/seasons')
-        .send({
-          name: safraMock,
-          year: 2024,
-          propertyId: testPropertyId,
-        })
+        .send(createSeasonData({ name: MOCKS.seasons.names.safra1999 }))
         .expect(201)
         .expect((res) => {
           expect(res.body).toHaveProperty('id');
-          expect(res.body.name).toBe(safraMock);
-          expect(res.body.year).toBe(2024);
+          expect(res.body.name).toBe(MOCKS.seasons.names.safra1999);
+          expect(res.body.year).toBe(MOCKS.seasons.years.current);
           expect(res.body.propertyId).toBe(testPropertyId);
           expect(res.body).toHaveProperty('createdAt');
           expect(res.body).toHaveProperty('updatedAt');
@@ -138,16 +179,17 @@ describe('SeasonController (e2e)', () => {
     it('should create another season with different year', () => {
       return request(app.getHttpServer())
         .post('/seasons')
-        .send({
-          name: safraMock1,
-          year: 2025,
-          propertyId: testPropertyId,
-        })
+        .send(
+          createSeasonData({
+            name: MOCKS.seasons.names.safra1998,
+            year: MOCKS.seasons.years.next,
+          }),
+        )
         .expect(201)
         .expect((res) => {
           expect(res.body).toHaveProperty('id');
-          expect(res.body.name).toBe(safraMock1);
-          expect(res.body.year).toBe(2025);
+          expect(res.body.name).toBe(MOCKS.seasons.names.safra1998);
+          expect(res.body.year).toBe(MOCKS.seasons.years.next);
           expect(res.body.propertyId).toBe(testPropertyId);
         });
     });
@@ -156,21 +198,13 @@ describe('SeasonController (e2e)', () => {
       // First, create a season
       await request(app.getHttpServer())
         .post('/seasons')
-        .send({
-          name: 'Test Season',
-          year: 2024,
-          propertyId: testPropertyId,
-        })
+        .send(createSeasonData({ name: MOCKS.seasons.names.test }))
         .expect(201);
 
       // Try to create another with the same name and year for the same property
       return request(app.getHttpServer())
         .post('/seasons')
-        .send({
-          name: 'Test Season',
-          year: 2024,
-          propertyId: testPropertyId,
-        })
+        .send(createSeasonData({ name: MOCKS.seasons.names.test }))
         .expect(400)
         .expect((res) => {
           expect(res.body.message).toContain(
@@ -182,11 +216,12 @@ describe('SeasonController (e2e)', () => {
     it('should return 400 for non-existent property', () => {
       return request(app.getHttpServer())
         .post('/seasons')
-        .send({
-          name: safraMock,
-          year: 2024,
-          propertyId: 'cmb8j9e2j0022rssssw1kuj76',
-        })
+        .send(
+          createSeasonData({
+            name: MOCKS.seasons.names.safra1999,
+            propertyId: MOCKS.ids.nonExistent,
+          }),
+        )
         .expect(400)
         .expect((res) => {
           expect(res.body.message).toContain('Property not found');
@@ -196,22 +231,24 @@ describe('SeasonController (e2e)', () => {
     it('should return 400 for invalid year (too low)', () => {
       return request(app.getHttpServer())
         .post('/seasons')
-        .send({
-          name: 'Safra Ancient',
-          year: 1800,
-          propertyId: testPropertyId,
-        })
+        .send(
+          createSeasonData({
+            name: MOCKS.seasons.names.ancient,
+            year: MOCKS.seasons.years.invalid.tooLow,
+          }),
+        )
         .expect(400);
     });
 
     it('should return 400 for invalid year (too high)', () => {
       return request(app.getHttpServer())
         .post('/seasons')
-        .send({
-          name: 'Safra Future',
-          year: 2200,
-          propertyId: testPropertyId,
-        })
+        .send(
+          createSeasonData({
+            name: MOCKS.seasons.names.future,
+            year: MOCKS.seasons.years.invalid.tooHigh,
+          }),
+        )
         .expect(400);
     });
 
@@ -219,7 +256,7 @@ describe('SeasonController (e2e)', () => {
       return request(app.getHttpServer())
         .post('/seasons')
         .send({
-          name: 'Incomplete Season',
+          name: MOCKS.seasons.names.incomplete,
         })
         .expect(400);
     });
@@ -227,43 +264,33 @@ describe('SeasonController (e2e)', () => {
     it('should return 400 for empty name', () => {
       return request(app.getHttpServer())
         .post('/seasons')
-        .send({
-          name: '',
-          year: 2024,
-          propertyId: testPropertyId,
-        })
+        .send(createSeasonData({ name: '' }))
         .expect(400);
     });
 
     it('should return 400 for invalid propertyId format', () => {
       return request(app.getHttpServer())
         .post('/seasons')
-        .send({
-          name: safraMock,
-          year: 2024,
-          propertyId: 'invalid-id-format',
-        })
+        .send(
+          createSeasonData({
+            propertyId: MOCKS.ids.invalid,
+          }),
+        )
         .expect(400);
     });
   });
 
   describe('GET /seasons', () => {
     beforeEach(async () => {
-      // Create test seasons
-      await prisma.season.create({
-        data: {
-          name: safraMock,
-          year: seasonMockYear,
-          propertyId: testPropertyId,
-        },
+      // Create test seasons using helper function
+      await createSeasonInDb({
+        name: MOCKS.seasons.names.safra1999,
+        year: MOCKS.seasons.years.mock,
       });
 
-      await prisma.season.create({
-        data: {
-          name: safraMock1,
-          year: 2025,
-          propertyId: testPropertyId,
-        },
+      await createSeasonInDb({
+        name: MOCKS.seasons.names.safra1998,
+        year: MOCKS.seasons.years.next,
       });
     });
 
@@ -300,21 +327,25 @@ describe('SeasonController (e2e)', () => {
 
     it('should support filtering by name', () => {
       return request(app.getHttpServer())
-        .get(`/seasons?${filterToString({ name: String(seasonMockYear) })}`)
+        .get(
+          `/seasons?${filterToString({ name: String(MOCKS.seasons.years.mock) })}`,
+        )
         .expect(200)
         .expect((res) => {
           expect(res.body.data.length).toBeGreaterThanOrEqual(1);
-          expect(res.body.data[0].name).toContain(String(seasonMockYear));
+          expect(res.body.data[0].name).toContain(
+            String(MOCKS.seasons.years.mock),
+          );
         });
     });
 
     it('should support filtering by year', () => {
       return request(app.getHttpServer())
-        .get(`/seasons?${filterToString({ year: seasonMockYear })}`)
+        .get(`/seasons?${filterToString({ year: MOCKS.seasons.years.mock })}`)
         .expect(200)
         .expect((res) => {
           expect(res.body.data.length).toBeGreaterThanOrEqual(1);
-          expect(res.body.data[0].year).toBe(seasonMockYear);
+          expect(res.body.data[0].year).toBe(MOCKS.seasons.years.mock);
         });
     });
 
@@ -333,21 +364,11 @@ describe('SeasonController (e2e)', () => {
 
   describe('GET /seasons/property/:propertyId', () => {
     beforeEach(async () => {
-      // Create test seasons for the property
-      await prisma.season.create({
-        data: {
-          name: safraMock,
-          year: 2024,
-          propertyId: testPropertyId,
-        },
-      });
-
-      await prisma.season.create({
-        data: {
-          name: 'Safra 2023',
-          year: 2023,
-          propertyId: testPropertyId,
-        },
+      // Create test seasons for the property using helper function
+      await createSeasonInDb({ name: MOCKS.seasons.names.safra1999 });
+      await createSeasonInDb({
+        name: MOCKS.seasons.names.safra2023,
+        year: MOCKS.seasons.years.previous,
       });
     });
 
@@ -365,7 +386,7 @@ describe('SeasonController (e2e)', () => {
             expect(season).toHaveProperty('crops');
           });
 
-          // Should be ordered by year desc (2024 first, then 2023)
+          // Should be ordered by year desc
           expect(res.body[0].year).toBeGreaterThanOrEqual(res.body[1].year);
         });
     });
@@ -382,13 +403,7 @@ describe('SeasonController (e2e)', () => {
 
   describe('GET /seasons/:id', () => {
     beforeEach(async () => {
-      const season = await prisma.season.create({
-        data: {
-          name: 'Test Season',
-          year: 2024,
-          propertyId: testPropertyId,
-        },
-      });
+      const season = await createSeasonInDb({ name: MOCKS.seasons.names.test });
       createdSeasonId = season.id;
     });
 
@@ -398,8 +413,8 @@ describe('SeasonController (e2e)', () => {
         .expect(200)
         .expect((res) => {
           expect(res.body.id).toBe(createdSeasonId);
-          expect(res.body.name).toBe('Test Season');
-          expect(res.body.year).toBe(2024);
+          expect(res.body.name).toBe(MOCKS.seasons.names.test);
+          expect(res.body.year).toBe(MOCKS.seasons.years.current);
           expect(res.body.propertyId).toBe(testPropertyId);
           expect(res.body).toHaveProperty('property');
           expect(res.body).toHaveProperty('crops');
@@ -415,13 +430,7 @@ describe('SeasonController (e2e)', () => {
 
   describe('PUT /seasons/:id', () => {
     beforeEach(async () => {
-      const season = await prisma.season.create({
-        data: {
-          name: 'Test Season',
-          year: 2024,
-          propertyId: testPropertyId,
-        },
-      });
+      const season = await createSeasonInDb({ name: MOCKS.seasons.names.test });
       createdSeasonId = season.id;
     });
 
@@ -429,13 +438,13 @@ describe('SeasonController (e2e)', () => {
       return request(app.getHttpServer())
         .put(`/seasons/${createdSeasonId}`)
         .send({
-          name: 'Updated Season',
+          name: MOCKS.seasons.names.updated,
         })
         .expect(200)
         .expect((res) => {
           expect(res.body.id).toBe(createdSeasonId);
-          expect(res.body.name).toBe('Updated Season');
-          expect(res.body.year).toBe(2024);
+          expect(res.body.name).toBe(MOCKS.seasons.names.updated);
+          expect(res.body.year).toBe(MOCKS.seasons.years.current);
           expect(res.body.propertyId).toBe(testPropertyId);
         });
     });
@@ -444,12 +453,12 @@ describe('SeasonController (e2e)', () => {
       return request(app.getHttpServer())
         .put(`/seasons/${createdSeasonId}`)
         .send({
-          year: 2025,
+          year: MOCKS.seasons.years.next,
         })
         .expect(200)
         .expect((res) => {
-          expect(res.body.year).toBe(2025);
-          expect(res.body.name).toBe('Test Season');
+          expect(res.body.year).toBe(MOCKS.seasons.years.next);
+          expect(res.body.name).toBe(MOCKS.seasons.names.test);
         });
     });
 
@@ -457,13 +466,13 @@ describe('SeasonController (e2e)', () => {
       return request(app.getHttpServer())
         .put(`/seasons/${createdSeasonId}`)
         .send({
-          name: 'Completely Updated Season',
-          year: 2026,
+          name: MOCKS.seasons.names.completelyUpdated,
+          year: MOCKS.seasons.years.future,
         })
         .expect(200)
         .expect((res) => {
-          expect(res.body.name).toBe('Completely Updated Season');
-          expect(res.body.year).toBe(2026);
+          expect(res.body.name).toBe(MOCKS.seasons.names.completelyUpdated);
+          expect(res.body.year).toBe(MOCKS.seasons.years.future);
         });
     });
 
@@ -471,7 +480,7 @@ describe('SeasonController (e2e)', () => {
       return request(app.getHttpServer())
         .put('/seasons/non-existent-id')
         .send({
-          name: 'Updated Name',
+          name: MOCKS.seasons.names.updated,
         })
         .expect(404);
     });
@@ -480,7 +489,7 @@ describe('SeasonController (e2e)', () => {
       return request(app.getHttpServer())
         .put(`/seasons/${createdSeasonId}`)
         .send({
-          year: 1800,
+          year: MOCKS.seasons.years.invalid.tooLow,
         })
         .expect(400);
     });
@@ -489,7 +498,7 @@ describe('SeasonController (e2e)', () => {
       return request(app.getHttpServer())
         .put(`/seasons/${createdSeasonId}`)
         .send({
-          year: 2200,
+          year: MOCKS.seasons.years.invalid.tooHigh,
         })
         .expect(400);
     });
@@ -504,21 +513,18 @@ describe('SeasonController (e2e)', () => {
     });
 
     it('should return 400 for duplicate season when updating', async () => {
-      // Create another season
-      await prisma.season.create({
-        data: {
-          name: 'Existing Season',
-          year: 2025,
-          propertyId: testPropertyId,
-        },
+      // Create another season using helper function
+      await createSeasonInDb({
+        name: MOCKS.seasons.names.existing,
+        year: MOCKS.seasons.years.next,
       });
 
       // Try to update current season to have the same name and year
       return request(app.getHttpServer())
         .put(`/seasons/${createdSeasonId}`)
         .send({
-          name: 'Existing Season',
-          year: 2025,
+          name: MOCKS.seasons.names.existing,
+          year: MOCKS.seasons.years.next,
         })
         .expect(400)
         .expect((res) => {
@@ -531,12 +537,8 @@ describe('SeasonController (e2e)', () => {
 
   describe('DELETE /seasons/:id', () => {
     beforeEach(async () => {
-      const season = await prisma.season.create({
-        data: {
-          name: 'Season to Delete',
-          year: 2024,
-          propertyId: testPropertyId,
-        },
+      const season = await createSeasonInDb({
+        name: MOCKS.seasons.names.toDelete,
       });
       createdSeasonId = season.id;
     });
@@ -547,7 +549,7 @@ describe('SeasonController (e2e)', () => {
         .expect(200)
         .expect((res) => {
           expect(res.body.id).toBe(createdSeasonId);
-          expect(res.body.name).toBe('Season to Delete');
+          expect(res.body.name).toBe(MOCKS.seasons.names.toDelete);
         });
     });
 
