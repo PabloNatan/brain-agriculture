@@ -60,4 +60,4 @@ ENV PORT=4000
 EXPOSE ${PORT}
 
 # Start the application
-CMD ["node", "dist/main"]
+CMD ["node", "dist/src/main"]
