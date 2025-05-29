@@ -112,7 +112,7 @@ describe('PropertyController (e2e)', () => {
   // Get all property names for cleanup
   const getAllPropertyNames = () => Object.values(MOCKS.properties.names);
 
-  beforeEach(async () => {
+  beforeAll(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
     }).compile();

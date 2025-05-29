@@ -15,7 +15,7 @@ describe('ProducerController (e2e)', () => {
   const cpf1 = cpf.generate();
   const cnpj1 = cnpj.generate();
 
-  beforeEach(async () => {
+  beforeAll(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
     }).compile();

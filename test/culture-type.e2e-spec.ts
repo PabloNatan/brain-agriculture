@@ -14,7 +14,7 @@ describe('CultureTypeController (e2e)', () => {
   let prisma: PrismaService;
   let createdCultureTypeId: string;
 
-  beforeEach(async () => {
+  beforeAll(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
     }).compile();

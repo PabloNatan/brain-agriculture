@@ -91,7 +91,7 @@ describe('SeasonController (e2e)', () => {
   // Get all season names for cleanup
   const getAllSeasonNames = () => Object.values(MOCKS.seasons.names);
 
-  beforeEach(async () => {
+  beforeAll(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
     }).compile();
