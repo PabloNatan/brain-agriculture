@@ -11,6 +11,13 @@ async function bootstrap() {
   app.setGlobalPrefix('/api');
   app.useGlobalFilters(new ZodExceptionFilter());
 
+  app.use('/', (req, res, next) => {
+    if (req.url === '/' || req.url === '/api') {
+      return res.redirect('/docs');
+    }
+    next();
+  });
+
   const config = new DocumentBuilder()
     .setTitle('Brain Agriculture API')
     .setDescription('API to manage the registration of rural producers')
